@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Hugo IV: The Antique Shop of Horrors</title>
 <style>
   html, body {
@@ -10,11 +10,18 @@
     background: #000; color: #aaa;
     font-family: "Courier New", monospace;
     overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
   }
   #wrap {
     width: 100%; height: 100%;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
+    gap: 6px;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
+    box-sizing: border-box;
   }
   #stage {
     position: relative;
@@ -52,10 +59,78 @@
     52% { opacity: 1; }
   }
   #hint {
-    margin-top: 8px; font-size: 12px; color: #555;
+    font-size: 12px; color: #555;
     text-align: center; user-select: none; line-height: 1.5;
   }
-  #parser { position: absolute; left: -9999px; }
+
+  /* ----- shared retro control styling ----- */
+  .rbtn {
+    font-family: "Courier New", monospace;
+    font-weight: bold;
+    color: #cfcfcf;
+    background: #1a1a1a;
+    border: 2px solid #666;
+    border-radius: 4px;
+    box-shadow: 0 2px 0 #000;
+    padding: 10px 14px;
+    font-size: 15px;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-user-select: none; user-select: none;
+  }
+  .rbtn:active { background: #333; transform: translateY(1px); box-shadow: 0 1px 0 #000; }
+
+  /* ----- title / death / win screen buttons ----- */
+  #screenbtns {
+    display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+  }
+  #screenbtns.hidden { display: none; }
+
+  /* ----- in-game play controls (d-pad + command bar) ----- */
+  #playctrls {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    width: 100%;
+  }
+  #playctrls.hidden { display: none; }
+
+  #cmdbar {
+    display: flex; align-items: center; gap: 6px;
+    width: min(92vw, 520px);
+    background: #000; border: 2px solid #555; border-radius: 4px;
+    padding: 4px 6px; box-sizing: border-box;
+  }
+  #cmdbar .prompt { color: #5f5; font-weight: bold; font-size: 16px; }
+  #parser {
+    flex: 1 1 auto; min-width: 0;
+    background: #000; color: #5f5; border: none; outline: none;
+    font-family: "Courier New", monospace; font-size: 16px; /* >=16px avoids iOS zoom */
+    text-transform: uppercase;
+    padding: 8px 4px;
+  }
+  #send { flex: 0 0 auto; }
+
+  /* D-pad: only meaningful for touch; hidden on pointer:fine devices */
+  #dpad {
+    display: none;
+    grid-template-columns: repeat(3, 58px);
+    grid-template-rows: repeat(3, 58px);
+    gap: 6px;
+    touch-action: none;
+  }
+  #dpad .dbtn {
+    font-size: 22px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #dpad .up    { grid-column: 2; grid-row: 1; }
+  #dpad .left  { grid-column: 1; grid-row: 2; }
+  #dpad .right { grid-column: 3; grid-row: 2; }
+  #dpad .down  { grid-column: 2; grid-row: 3; }
+
+  /* Show the d-pad and toggle buttons only on touch (coarse pointer) devices */
+  body.touch #dpad { display: grid; }
+  #toggles { display: none; gap: 10px; }
+  body.touch #toggles { display: flex; }
+  body.touch #hint { display: none; }     /* keyboard hint is irrelevant on touch */
 </style>
 </head>
 <body>
@@ -66,7 +141,33 @@
   </div>
   <div id="hint">Arrow keys = walk &nbsp;•&nbsp; Type a command + Enter &nbsp;•&nbsp; LOOK / GET / OPEN / USE / WIND / SAVE / LOAD / HELP<br>
   M = sound &nbsp;•&nbsp; T = CRT filter</div>
-  <input id="parser" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
+
+  <!-- Title / death / win screen buttons (tap to advance) -->
+  <div id="screenbtns" class="hidden">
+    <button id="btnPrimary" class="rbtn">START</button>
+    <button id="btnContinue" class="rbtn">CONTINUE</button>
+  </div>
+
+  <!-- In-game controls: command bar + on-screen d-pad (touch) -->
+  <div id="playctrls" class="hidden">
+    <div id="cmdbar">
+      <span class="prompt">&gt;</span>
+      <input id="parser" type="text" autocomplete="off" autocapitalize="characters"
+             autocorrect="off" spellcheck="false" enterkeyhint="go"
+             placeholder="type a command...">
+      <button id="send" class="rbtn">GO</button>
+    </div>
+    <div id="dpad">
+      <button class="rbtn dbtn up"    data-dir="ArrowUp"    aria-label="up">&#9650;</button>
+      <button class="rbtn dbtn left"  data-dir="ArrowLeft"  aria-label="left">&#9664;</button>
+      <button class="rbtn dbtn right" data-dir="ArrowRight" aria-label="right">&#9654;</button>
+      <button class="rbtn dbtn down"  data-dir="ArrowDown"  aria-label="down">&#9660;</button>
+    </div>
+    <div id="toggles">
+      <button id="btnSound" class="rbtn">SOUND</button>
+      <button id="btnCRT" class="rbtn">CRT</button>
+    </div>
+  </div>
 </div>
 <script>
 "use strict";
@@ -97,10 +198,12 @@ const parserInput = document.getElementById("parser");
 const crtEl = document.getElementById("crt");
 
 function fitScreen() {
-  const margin = 90;
+  // Reserve vertical room for the on-screen controls (bigger on touch).
+  const isTouch = document.body.classList.contains("touch");
+  const reserve = isTouch ? 300 : 100;
   const scale = Math.max(1, Math.floor(Math.min(
     (window.innerWidth) / W,
-    (window.innerHeight - margin) / H
+    (window.innerHeight - reserve) / H
   )));
   canvas.style.width = (W * scale) + "px";
   canvas.style.height = (H * scale) + "px";
@@ -813,49 +916,138 @@ function travel(id){
    ========================================================= */
 const keys = {};
 let crtOn = true;
-function setCRT(on){ crtOn = on; crtEl.classList.toggle("off", !on); }
+function setCRT(on){ crtOn = on; crtEl.classList.toggle("off", !on); updateToggleLabels(); }
 
-window.addEventListener("keydown", (e)=>{
-  // global toggles
-  if((e.key==="t"||e.key==="T") && document.activeElement!==parserInput){ setCRT(!crtOn); return; }
-  if((e.key==="m"||e.key==="M") && document.activeElement!==parserInput){ Sound.toggleMute(); return; }
+// ---- touch detection ----
+const TOUCH = matchMedia("(pointer: coarse)").matches
+           || ("ontouchstart" in window)
+           || navigator.maxTouchPoints > 0;
+if(TOUCH){ document.body.classList.add("touch"); fitScreen(); }
 
-  if(game.scene!=="play"){
-    if(e.key==="Enter"){
-      if(game.scene==="title"){ startNew(); }
-      else if(game.scene==="dead"){ respawn(); }
-      else if(game.scene==="win"){ resetGame(); }
-    }
-    if((e.key==="c"||e.key==="C") && game.scene==="title" && hasSave()){
-      if(loadGame()){ Sound.beep(); say("Welcome back. You are in: "+rooms[game.room].name+".",11); }
-    }
-    return;
-  }
-  if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)){ keys[e.key]=true; e.preventDefault(); }
-});
-window.addEventListener("keyup",(e)=>{ keys[e.key]=false; });
+// ---- element handles ----
+const elScreenBtns = document.getElementById("screenbtns");
+const elPlayCtrls  = document.getElementById("playctrls");
+const elPrimary    = document.getElementById("btnPrimary");
+const elContinue   = document.getElementById("btnContinue");
+const elSend       = document.getElementById("send");
+const elSound      = document.getElementById("btnSound");
+const elCRT        = document.getElementById("btnCRT");
+const elDpad       = document.getElementById("dpad");
+const elStage      = document.getElementById("stage");
 
-parserInput.addEventListener("keydown",(e)=>{ e.stopPropagation(); });
-parserInput.addEventListener("keyup",(e)=>{
-  e.stopPropagation();
-  if(e.key==="Enter"){
-    const v = parserInput.value; parserInput.value="";
-    if(game.scene==="play" && v.trim()) handleCommand(v);
-  }
-});
-window.addEventListener("keydown",(e)=>{
-  if(game.scene!=="play") return;
-  if(e.key.length===1 && /[a-zA-Z0-9 '?]/.test(e.key) && document.activeElement!==parserInput){
-    if((e.key==="m"||e.key==="M"||e.key==="t"||e.key==="T")) return; // reserved toggles
-    parserInput.focus();
-  }
-});
-canvas.addEventListener("mousedown",()=>{ if(game.scene==="play") parserInput.focus(); ensureAudioOnGesture(); });
-window.addEventListener("keydown", ensureAudioOnGesture);
+// ---- audio unlock on first gesture ----
 let _titlePlayed=false;
 function ensureAudioOnGesture(){
   if(game.scene==="title" && !_titlePlayed){ _titlePlayed=true; Sound.title(); }
 }
+
+// ---- shared actions (used by both keyboard and touch) ----
+function pressEnter(){
+  if(game.scene==="title") startNew();
+  else if(game.scene==="dead") respawn();
+  else if(game.scene==="win") resetGame();
+}
+function pressContinue(){
+  if(game.scene==="title" && hasSave()){
+    if(loadGame()){ Sound.beep(); say("Welcome back. You are in: "+rooms[game.room].name+".",11); }
+  }
+}
+function submitCommand(){
+  const v = parserInput.value; parserInput.value="";
+  if(game.scene==="play" && v.trim()) handleCommand(v);
+}
+
+// ---- contextual control UI (title/death/win buttons vs. play controls) ----
+function updateToggleLabels(){
+  if(elSound) elSound.textContent = Sound.isMuted() ? "SOUND OFF" : "SOUND ON";
+  if(elCRT)   elCRT.textContent   = crtOn ? "CRT ON" : "CRT OFF";
+}
+function updateControlsUI(){
+  const playing = (game.scene==="play");
+  elScreenBtns.classList.toggle("hidden", playing);
+  elPlayCtrls.classList.toggle("hidden", !playing);
+  if(!playing){
+    if(game.scene==="title"){
+      elPrimary.textContent  = hasSave() ? "NEW GAME" : "START";
+      elContinue.style.display = hasSave() ? "" : "none";
+      elContinue.textContent = "CONTINUE";
+    } else if(game.scene==="dead"){
+      elPrimary.textContent  = "CONTINUE";
+      elContinue.style.display = "none";
+    } else if(game.scene==="win"){
+      elPrimary.textContent  = "PLAY AGAIN";
+      elContinue.style.display = "none";
+    }
+  }
+}
+
+// ====================== KEYBOARD ======================
+// Capture phase: arrows always drive movement (never the text cursor).
+window.addEventListener("keydown", (e)=>{
+  const typing = (document.activeElement===parserInput);
+  if((e.key==="t"||e.key==="T") && !typing){ setCRT(!crtOn); return; }
+  if((e.key==="m"||e.key==="M") && !typing){ Sound.toggleMute(); updateToggleLabels(); return; }
+
+  if(e.key==="ArrowLeft"||e.key==="ArrowRight"||e.key==="ArrowUp"||e.key==="ArrowDown"){
+    if(game.scene==="play") keys[e.key]=true;
+    e.preventDefault();
+    return;
+  }
+  if(game.scene!=="play"){
+    if(e.key==="Enter"){ e.preventDefault(); pressEnter(); return; }
+    if(e.key==="c"||e.key==="C"){ pressContinue(); return; }
+  }
+}, true);
+window.addEventListener("keyup",(e)=>{ keys[e.key]=false; });
+window.addEventListener("keydown", ensureAudioOnGesture);
+
+// Submit a typed command on Enter while playing.
+parserInput.addEventListener("keydown",(e)=>{
+  if(e.key==="Enter"){ e.preventDefault(); submitCommand(); }
+});
+// Desktop convenience: start typing to focus the command field.
+window.addEventListener("keydown",(e)=>{
+  if(game.scene!=="play" || TOUCH) return;
+  if(e.key.length===1 && /[a-z0-9 '?]/i.test(e.key) && document.activeElement!==parserInput){
+    if(/[mt]/i.test(e.key)) return; // reserved toggles
+    parserInput.focus();
+  }
+});
+
+// ====================== TOUCH / POINTER ======================
+// On-screen D-pad.
+function clearDirs(){
+  keys.ArrowUp=keys.ArrowDown=keys.ArrowLeft=keys.ArrowRight=false;
+}
+elDpad.querySelectorAll(".dbtn").forEach(btn=>{
+  const dir = btn.getAttribute("data-dir");
+  btn.addEventListener("pointerdown",(e)=>{ e.preventDefault(); ensureAudioOnGesture(); keys[dir]=true; }, {passive:false});
+  btn.addEventListener("pointerup",  (e)=>{ e.preventDefault(); keys[dir]=false; }, {passive:false});
+  btn.addEventListener("pointercancel",(e)=>{ keys[dir]=false; });
+  // block context menu / text-select on long press
+  btn.addEventListener("contextmenu",(e)=>e.preventDefault());
+});
+window.addEventListener("pointerup", clearDirs);
+window.addEventListener("pointercancel", clearDirs);
+window.addEventListener("blur", clearDirs);
+
+// Buttons.
+elSend.addEventListener("click",(e)=>{ e.preventDefault(); ensureAudioOnGesture(); submitCommand(); parserInput.focus(); });
+elPrimary.addEventListener("click",()=>{ ensureAudioOnGesture(); pressEnter(); });
+elContinue.addEventListener("click",()=>{ ensureAudioOnGesture(); pressContinue(); });
+elSound.addEventListener("click",()=>{ ensureAudioOnGesture(); Sound.toggleMute(); updateToggleLabels(); });
+elCRT.addEventListener("click",()=>{ setCRT(!crtOn); });
+
+// Tap the screen to advance non-play screens (title tap only when no save, to
+// protect an existing saved game — use CONTINUE/NEW GAME buttons otherwise).
+elStage.addEventListener("pointerdown",(e)=>{
+  ensureAudioOnGesture();
+  if(game.scene==="play") return;
+  e.preventDefault();
+  if(game.scene==="title"){ if(!hasSave()) startNew(); }
+  else if(game.scene==="dead") respawn();
+  else if(game.scene==="win") resetGame();
+});
 
 function startNew(){
   try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
@@ -943,9 +1135,10 @@ function renderTitle(){
   textCentered("THE ANTIQUE SHOP", 36, 12);
   textCentered("OF HORRORS", 46, 12);
   textCentered("AN UNOFFICIAL EGA ADVENTURE", 150, 7);
-  if(((performance.now()/500)|0)%2===0) textCentered("PRESS ENTER TO BEGIN", 168, 15);
-  if(hasSave()) textCentered("C = CONTINUE SAVED GAME", 180, 11);
-  textCentered("M=SOUND   T=CRT", 190, 8);
+  if(((performance.now()/500)|0)%2===0)
+    textCentered(TOUCH ? "TAP START BELOW" : "PRESS ENTER TO BEGIN", 168, 15);
+  if(hasSave()) textCentered(TOUCH ? "OR TAP CONTINUE" : "C = CONTINUE SAVED GAME", 180, 11);
+  if(!TOUCH) textCentered("M=SOUND   T=CRT", 190, 8);
 }
 
 function renderDead(){
@@ -956,7 +1149,8 @@ function renderDead(){
   const lines = wrap(game.deathCause||"Hugo has met an untimely end.", 44);
   let y=64; for(const ln of lines){ textCentered(ln,y,7); y+=10; }
   textCentered("- but death is rarely permanent here -", y+12, 8);
-  if(((performance.now()/500)|0)%2===0) textCentered("PRESS ENTER TO CONTINUE", y+32, 15);
+  if(((performance.now()/500)|0)%2===0)
+    textCentered(TOUCH ? "TAP CONTINUE BELOW" : "PRESS ENTER TO CONTINUE", y+32, 15);
 }
 
 function renderWin(){
@@ -973,7 +1167,8 @@ function renderWin(){
   const lines = wrap(body, 44); let y=92;
   for(const ln of lines){ textCentered(ln,y,11); y+=10; }
   textCentered("THE END", y+12, 14);
-  if(((performance.now()/500)|0)%2===0) textCentered("PRESS ENTER TO PLAY AGAIN", y+30, 15);
+  if(((performance.now()/500)|0)%2===0)
+    textCentered(TOUCH ? "TAP PLAY AGAIN BELOW" : "PRESS ENTER TO PLAY AGAIN", y+30, 15);
 }
 
 let _winPlayed=false;
@@ -985,7 +1180,9 @@ function resetGame(){
   _titlePlayed=false; _winPlayed=false;
 }
 
+let _uiScene = null;
 function frame(){
+  if(game.scene !== _uiScene){ _uiScene = game.scene; updateControlsUI(); }
   update();
   if(game.scene==="title") renderTitle();
   else if(game.scene==="dead") renderDead();
@@ -996,6 +1193,8 @@ function frame(){
 
 /* boot */
 resetGame();
+updateToggleLabels();
+updateControlsUI();
 say("Welcome to YE OLDE ANTIQUES.",14);
 frame();
 </script>
