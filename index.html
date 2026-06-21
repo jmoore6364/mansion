@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Hugo IV: The Antique Shop of Horrors</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #000; color: #aaa;
+    font-family: "Courier New", monospace;
+    overflow: hidden;
+  }
+  #wrap {
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  #screen {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #000;
+    box-shadow: 0 0 0 2px #555, 0 0 24px #000 inset;
+  }
+  #hint {
+    margin-top: 8px; font-size: 12px; color: #555;
+    text-align: center; user-select: none;
+  }
+  #parser {
+    position: absolute; left: -9999px;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="screen" width="320" height="200"></canvas>
+  <div id="hint">Arrow keys = walk &nbsp;•&nbsp; Type a command + Enter &nbsp;•&nbsp; Try: LOOK, HELP, INVENTORY</div>
+  <input id="parser" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
+</div>
+<script>
+"use strict";
+/* ============================================================
+   Hugo IV: The Antique Shop of Horrors
+   A retro EGA-style adventure (homage to Hugo's House of Horrors)
+   - 320x200, 16-color EGA palette, nearest-neighbor scaling
+   - Sierra-style: walk with arrows, type parser commands
+   - PC-speaker-style sound via Web Audio square waves
+   ============================================================ */
+
+/* ---------- EGA 16-color palette ---------- */
+const EGA = [
+  [0,0,0],[0,0,170],[0,170,0],[0,170,170],
+  [170,0,0],[170,0,170],[170,85,0],[170,170,170],
+  [85,85,85],[85,85,255],[85,255,85],[85,255,255],
+  [255,85,85],[255,85,255],[255,255,85],[255,255,255]
+];
+const RGB = EGA.map(c => `rgb(${c[0]},${c[1]},${c[2]})`);
+
+/* ---------- Canvas setup ---------- */
+const W = 320, H = 200;
+const canvas = document.getElementById("screen");
+const ctx = canvas.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+const parserInput = document.getElementById("parser");
+
+function fitScreen() {
+  const margin = 70;
+  const scale = Math.max(1, Math.floor(Math.min(
+    (window.innerWidth) / W,
+    (window.innerHeight - margin) / H
+  )));
+  canvas.style.width = (W * scale) + "px";
+  canvas.style.height = (H * scale) + "px";
+}
+window.addEventListener("resize", fitScreen);
+fitScreen();
+
+/* ---------- Pixel drawing helpers ---------- */
+function clear(c) { ctx.fillStyle = RGB[c]; ctx.fillRect(0,0,W,H); }
+function rect(x,y,w,h,c){ ctx.fillStyle = RGB[c]; ctx.fillRect(x|0,y|0,w|0,h|0); }
+function px(x,y,c){ ctx.fillStyle = RGB[c]; ctx.fillRect(x|0,y|0,1,1); }
+function line(x1,y1,x2,y2,c){
+  ctx.strokeStyle = RGB[c];
+  ctx.beginPath();
+  ctx.moveTo((x1|0)+0.5,(y1|0)+0.5);
+  ctx.lineTo((x2|0)+0.5,(y2|0)+0.5);
+  ctx.stroke();
+}
+// dithered fill: classic EGA checkerboard of two colors
+function dither(x,y,w,h,c1,c2){
+  for(let j=0;j<h;j++)for(let i=0;i<w;i++){
+    px(x+i,y+j, ((i+j)&1)?c1:c2);
+  }
+}
+
+/* ---------- Bitmap font (5x7) ---------- */
+// Minimal uppercase font; lowercase mapped to uppercase glyphs.
+const FONT = {
+ 'A':["01110","10001","10001","11111","10001","10001","10001"],
+ 'B':["11110","10001","11110","10001","10001","10001","11110"],
+ 'C':["01110","10001","10000","10000","10000","10001","01110"],
+ 'D':["11100","10010","10001","10001","10001","10010","11100"],
+ 'E':["11111","10000","11110","10000","10000","10000","11111"],
+ 'F':["11111","10000","11110","10000","10000","10000","10000"],
+ 'G':["01110","10001","10000","10111","10001","10001","01111"],
+ 'H':["10001","10001","11111","10001","10001","10001","10001"],
+ 'I':["11111","00100","00100","00100","00100","00100","11111"],
+ 'J':["00111","00010","00010","00010","10010","10010","01100"],
+ 'K':["10001","10010","11100","10100","10010","10001","10001"],
+ 'L':["10000","10000","10000","10000","10000","10000","11111"],
+ 'M':["10001","11011","10101","10101","10001","10001","10001"],
+ 'N':["10001","11001","10101","10011","10001","10001","10001"],
+ 'O':["01110","10001","10001","10001","10001","10001","01110"],
+ 'P':["11110","10001","10001","11110","10000","10000","10000"],
+ 'Q':["01110","10001","10001","10001","10101","10010","01101"],
+ 'R':["11110","10001","10001","11110","10100","10010","10001"],
+ 'S':["01111","10000","10000","01110","00001","00001","11110"],
+ 'T':["11111","00100","00100","00100","00100","00100","00100"],
+ 'U':["10001","10001","10001","10001","10001","10001","01110"],
+ 'V':["10001","10001","10001","10001","10001","01010","00100"],
+ 'W':["10001","10001","10001","10101","10101","11011","10001"],
+ 'X':["10001","10001","01010","00100","01010","10001","10001"],
+ 'Y':["10001","10001","01010","00100","00100","00100","00100"],
+ 'Z':["11111","00001","00010","00100","01000","10000","11111"],
+ '0':["01110","10011","10101","10101","11001","10001","01110"],
+ '1':["00100","01100","00100","00100","00100","00100","01110"],
+ '2':["01110","10001","00001","00110","01000","10000","11111"],
+ '3':["11110","00001","00001","01110","00001","00001","11110"],
+ '4':["00010","00110","01010","10010","11111","00010","00010"],
+ '5':["11111","10000","11110","00001","00001","10001","01110"],
+ '6':["01110","10000","11110","10001","10001","10001","01110"],
+ '7':["11111","00001","00010","00100","01000","01000","01000"],
+ '8':["01110","10001","01110","10001","10001","10001","01110"],
+ '9':["01110","10001","10001","01111","00001","00001","01110"],
+ '.':["00000","00000","00000","00000","00000","01100","01100"],
+ ',':["00000","00000","00000","00000","01100","01100","00100"],
+ '!':["00100","00100","00100","00100","00100","00000","00100"],
+ '?':["01110","10001","00010","00100","00100","00000","00100"],
+ "'":["00100","00100","00100","00000","00000","00000","00000"],
+ ':':["00000","01100","01100","00000","01100","01100","00000"],
+ '-':["00000","00000","00000","11111","00000","00000","00000"],
+ '+':["00000","00100","00100","11111","00100","00100","00000"],
+ '/':["00001","00010","00100","00100","01000","10000","10000"],
+ '(':["00010","00100","01000","01000","01000","00100","00010"],
+ ')':["01000","00100","00010","00010","00010","00100","01000"],
+ '&':["01100","10010","10100","01000","10101","10010","01101"],
+ '%':["11001","11010","00100","01000","10011","00101","00100"],
+ ' ':["00000","00000","00000","00000","00000","00000","00000"]
+};
+function drawChar(ch,x,y,c){
+  const g = FONT[ch] || FONT['?'];
+  for(let j=0;j<7;j++){
+    const row = g[j];
+    for(let i=0;i<5;i++) if(row[i]==='1') px(x+i,y+j,c);
+  }
+}
+function text(str,x,y,c){
+  str = (str||"").toUpperCase();
+  let cx = x;
+  for(const ch of str){ drawChar(ch,cx,y,c); cx += 6; }
+}
+function textWidth(str){ return (str||"").length*6; }
+function textCentered(str,y,c){ text(str, ((W - textWidth(str))/2)|0, y, c); }
+// word-wrap into lines of max chars
+function wrap(str, maxChars){
+  const words = (str||"").split(" ");
+  const lines = []; let cur = "";
+  for(const w of words){
+    if((cur+ (cur?" ":"") + w).length > maxChars){
+      if(cur) lines.push(cur);
+      cur = w;
+    } else cur = cur ? cur+" "+w : w;
+  }
+  if(cur) lines.push(cur);
+  return lines;
+}
+
+/* =========================================================
+   SOUND: PC-speaker style square-wave beeper (Web Audio)
+   ========================================================= */
+const Sound = (() => {
+  let actx = null;
+  let muted = false;
+  function ensure(){
+    if(!actx){
+      try { actx = new (window.AudioContext||window.webkitAudioContext)(); }
+      catch(e){ actx = null; }
+    }
+    if(actx && actx.state === "suspended") actx.resume();
+    return actx;
+  }
+  // play a single square tone
+  function tone(freq, dur, when, vol){
+    const a = ensure(); if(!a || muted) return;
+    const t = (when==null? a.currentTime : when);
+    const osc = a.createOscillator();
+    const g = a.createGain();
+    osc.type = "square";
+    osc.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime((vol==null?0.10:vol), t+0.005);
+    g.gain.setValueAtTime((vol==null?0.10:vol), t+Math.max(0.01,dur-0.01));
+    g.gain.linearRampToValueAtTime(0, t+dur);
+    osc.connect(g); g.connect(a.destination);
+    osc.start(t); osc.stop(t+dur+0.01);
+  }
+  // play a sequence: [[freq,durSeconds],...]  (freq 0 = rest)
+  function play(seq, vol){
+    const a = ensure(); if(!a) return;
+    let t = a.currentTime + 0.01;
+    for(const [f,d] of seq){
+      if(f>0) tone(f, d*0.92, t, vol);
+      t += d;
+    }
+  }
+  return {
+    beep(){ tone(880,0.05); },
+    blip(){ tone(1320,0.03,null,0.07); },
+    error(){ tone(160,0.18,null,0.12); },
+    pickup(){ play([[784,0.06],[1047,0.06],[1319,0.10]]); },
+    door(){ play([[300,0.07],[240,0.09]],0.12); },
+    footstep(){ tone(110,0.025,null,0.05); },
+    chime(){ play([[1047,0.08],[0,0.02],[1319,0.08],[0,0.02],[1568,0.16]]); },
+    sting(){ play([[330,0.10],[311,0.10],[294,0.30]],0.13); }, // ominous
+    title(){
+      // a short spooky-jaunty theme in square wave
+      const Q=0.18, E=0.09;
+      play([
+        [392,Q],[392,E],[440,E],[523,Q],[440,Q],
+        [392,E],[349,E],[392,Q],[0,E],
+        [330,Q],[349,E],[392,E],[440,Q],[392,Q],
+        [330,Q],[294,Q],[262,Q+E]
+      ], 0.09);
+    },
+    toggleMute(){ muted = !muted; return muted; }
+  };
+})();
+
+/* =========================================================
+   SPRITE: Hugo (drawn from a pixel map, 2 walk frames)
+   color key -> EGA index; '.' = transparent
+   ========================================================= */
+const SPR = {
+  '.':-1,'H':6,'h':8,'F':14,'S':12,'s':4,'P':1,'p':9,'B':0,'W':15,'k':0
+};
+// 11 wide x 19 tall
+const HUGO_A = [
+  "...HHHHH...",
+  "..HHHHHHH..",
+  "..HhFFFhh..",
+  "..hFFFFFh..",
+  "..hFBFBFh..",
+  "..hFFFFFh..",
+  "...hFFFh...",
+  "..WWSSSWW..",
+  ".WSSSSSSSW.",
+  "WSSSSSSSSSW",
+  "WSsSSSSSsSW",
+  ".SSSSSSSSS.",
+  "..SSSSSSS..",
+  "..PPP.PPP..",
+  "..PPP.PPP..",
+  "..PPP.PPP..",
+  "..PP...PP..",
+  "..kk...kk..",
+  ".kkk...kkk."
+];
+const HUGO_B = [
+  "...HHHHH...",
+  "..HHHHHHH..",
+  "..HhFFFhh..",
+  "..hFFFFFh..",
+  "..hFBFBFh..",
+  "..hFFFFFh..",
+  "...hFFFh...",
+  "..WWSSSWW..",
+  ".WSSSSSSSW.",
+  "WSSSSSSSSSW",
+  "WSsSSSSSsSW",
+  ".SSSSSSSSS.",
+  "..SSSSSSS..",
+  "..PPP.PPP..",
+  "..PPP.PPP..",
+  "...PP.PP...",
+  "...PP.PP...",
+  "..kk...kk..",
+  "..kkk.kkk.."
+];
+function drawSprite(map,x,y,flip){
+  const h = map.length, w = map[0].length;
+  for(let j=0;j<h;j++){
+    for(let i=0;i<w;i++){
+      const ch = map[j][flip ? (w-1-i) : i];
+      const c = SPR[ch];
+      if(c>=0) px(x+i, y+j, c);
+    }
+  }
+}
+
+/* =========================================================
+   GAME STATE
+   ========================================================= */
+const game = {
+  scene: "title",        // title | play | gameover
+  room: "street",
+  // player position (feet anchor roughly at px+5, py+19)
+  px: 150, py: 150,
+  facing: 1,             // 1 right, -1 left
+  walking: false, walkPhase: 0,
+  inv: [],
+  flags: {},
+  msg: "",
+  msgTimer: 0,
+  textColor: 15
+};
+function flag(k){ return !!game.flags[k]; }
+function setFlag(k,v){ game.flags[k] = (v===undefined?true:v); }
+function hasItem(id){ return game.inv.includes(id); }
+function giveItem(id){ if(!hasItem(id)){ game.inv.push(id); } }
+function takeItem(id){ game.inv = game.inv.filter(x=>x!==id); }
+
+function say(s, color){
+  game.msg = s;
+  game.msgTimer = Math.max(180, s.length*4);
+  game.textColor = color==null?15:color;
+}
+
+/* =========================================================
+   ROOMS
+   Each room: draw(), walkbox {x,y,w,h}, exits, look (parser)
+   ========================================================= */
+const ITEMS = {
+  key:   { name:"a brass key" },
+  oil:   { name:"an oil can" },
+  coin:  { name:"a tarnished silver coin" },
+  music: { name:"an antique music box" }
+};
+
+const rooms = {
+  /* ---------------- STREET ---------------- */
+  street: {
+    name:"Cobblestone Street",
+    walk:{x:8,y:140,w:304,h:48},
+    enterX:150, enterY:150,
+    exits:{},
+    draw(){
+      // sky
+      rect(0,0,W,120, 1);
+      // moon
+      rect(255,16,22,22,15); rect(252,20,22,16,15);
+      rect(268,14,8,8,1); rect(264,28,6,6,1);
+      // distant rooftops
+      for(let i=0;i<W;i+=40){ rect(i,96,30,24,8); rect(i+6,86,4,12,8); }
+      // the antique shop building
+      rect(60,40,200,80, 6);
+      rect(60,40,200,80, 6);
+      // brick dither
+      for(let y=40;y<118;y+=8){ for(let x=60;x<260;x+=16){ rect(x,y,15,1,8); } }
+      for(let x=60;x<260;x+=16) rect(x,40,1,78,8);
+      // shop sign
+      rect(96,30,128,16, 0);
+      rect(96,30,128,16, 0);
+      text("YE OLDE ANTIQUES", 100, 35, 14);
+      // window with glow
+      dither(76,64,48,36, 6,14);
+      rect(76,64,48,36, 0); // frame redraw
+      dither(78,66,44,32, 14,6);
+      line(100,66,100,98,0); line(78,82,122,82,0);
+      // door
+      rect(150,72,40,48, 8);
+      rect(150,72,40,48, 8);
+      rect(152,74,36,44, 6);
+      rect(182,94,4,4,14); // knob
+      // doormat
+      rect(150,124,40,8, flag("mat_moved")?6:4);
+      if(!flag("mat_moved")) text("WELCOME", 152,125, 15);
+      // ground
+      rect(0,120,W,80, 8);
+      for(let y=124;y<H;y+=10) for(let x=(y%20);x<W;x+=20){ rect(x,y,9,1,7); }
+      // lamp post
+      rect(28,70,4,52,0); rect(20,64,20,10,14); rect(24,60,12,6,0);
+    },
+    look(noun){
+      if(!noun||noun==="around"||noun==="street") return say("A foggy cobblestone street. YE OLDE ANTIQUES looms ahead, its door shut. A WELCOME mat lies at the step.",14);
+      if(noun==="shop"||noun==="building"||noun==="antiques"||noun==="store") return say("A crooked old antique shop. The sign creaks in the wind. The DOOR is closed.",14);
+      if(noun==="mat"||noun==="doormat"||noun==="welcome"){
+        if(flag("mat_moved")) return say("Just a plain mat now. You already found what was under it.",7);
+        return say("A frayed WELCOME mat. It looks like something might be hidden UNDER it.",14);
+      }
+      if(noun==="door"){
+        if(flag("door_open")) return say("The shop door stands open. Walk UP to go inside.",10);
+        if(hasItem("key")) return say("A heavy oak door, locked. Maybe your brass KEY fits. Try: OPEN DOOR.",14);
+        return say("A heavy oak door. It's locked tight. You'll need a key.",14);
+      }
+      if(noun==="moon") return say("A pale full moon. Of course it's a full moon.",7);
+      if(noun==="window") return say("Dusty glass. Vague shapes of furniture lurk within.",14);
+      if(noun==="sign") return say("'YE OLDE ANTIQUES — Est. a very long time ago.'",14);
+      if(noun==="lamp"||noun==="lamppost"||noun==="light") return say("A gas lamp flickers, fighting the fog.",14);
+      return null;
+    }
+  },
+
+  /* ---------------- SHOP INTERIOR ---------------- */
+  shop: {
+    name:"Inside the Antique Shop",
+    walk:{x:8,y:150,w:304,h:38},
+    enterX:40, enterY:158,
+    exits:{},
+    draw(){
+      // back wall
+      rect(0,0,W,160, 6);
+      dither(0,0,W,160, 6,8);
+      // floor boards
+      rect(0,160,W,40, 8);
+      for(let x=0;x<W;x+=24) rect(x,160,1,40,0);
+      rect(0,160,W,2,0);
+      // exit doorway (to street) left
+      rect(8,96,40,64, 0);
+      rect(12,100,32,56, 1);
+      text("EXIT", 14,120, 14);
+      // shelf with music box
+      rect(210,70,90,10, 0); rect(210,80,90,2,8);
+      if(!flag("music_taken")){
+        // music box
+        rect(238,52,28,18, 5); rect(238,52,28,4,13);
+        rect(244,46,16,6,14); // lid
+        rect(250,40,4,8,7);    // crank
+      }
+      // grandfather clock (the cursed antique) center-right
+      rect(150,40,44,118, 6);
+      rect(150,40,44,118, 6);
+      rect(152,42,40,114, 0);
+      rect(154,44,36,40, 1);       // glass face
+      // clock face
+      rect(160,50,24,24, 15);
+      rect(171,52,2,10,0); line(172,62,172,55,0); // hour hand drawn separately
+      // hands
+      line(172,62,172,54,0);
+      line(172,62,180,62, 0);
+      // pendulum window
+      rect(162,92,20,56, 1);
+      rect(170,96,4,44,14);
+      rect(166,140,12,8,14); // bob
+      // a crate
+      rect(60,128,40,32, 6); rect(60,128,40,32,6);
+      rect(60,128,40,2,14); rect(60,158,40,2,0);
+      line(60,128,100,160,8); line(100,128,60,160,8);
+      // cobwebs
+      line(0,0,30,30,7); line(30,0,0,30,7);
+      line(W,0,W-30,30,7);
+      // sign over exit handled by text
+      // dim title
+      text("DUSTY ANTIQUES EVERYWHERE", 70, 8, 14);
+    },
+    look(noun){
+      if(!noun||noun==="around"||noun==="shop"||noun==="room") return say("A cramped shop crammed with relics. A GRANDFATHER CLOCK ticks in the gloom. A SHELF holds a small box. An EXIT leads back to the street.",14);
+      if(noun==="clock"||noun==="grandfather"){
+        if(flag("clock_open")) return say("The clock's case hangs open, revealing a dark passage behind it...",10);
+        if(flag("clock_oiled")) return say("The clock's case is unstuck now. Try: OPEN CLOCK.",14);
+        return say("A towering grandfather clock. The case door is RUSTED shut. The hands point to midnight.",14);
+      }
+      if(noun==="shelf") return say(flag("music_taken")?"An empty dusty shelf.":"A high shelf holding a small ornate MUSIC BOX.",14);
+      if(noun==="music"||noun==="box"||noun==="musicbox"){
+        if(flag("music_taken")&&hasItem("music")) return say("The antique music box. Try: WIND BOX, or USE BOX.",14);
+        if(flag("music_taken")) return say("You don't see it here.",7);
+        return say("An ornate music box with a tiny crank. Try: GET BOX.",14);
+      }
+      if(noun==="crate"||noun==="box2") return say("A wooden crate, nailed shut. Faintly you hear something scratching inside. Best not.",14);
+      if(noun==="exit"||noun==="door") return say("The doorway back to the street. Walk LEFT into it to leave.",14);
+      if(noun==="web"||noun==="cobweb"||noun==="cobwebs") return say("Thick cobwebs. The spiders have good taste in real estate.",7);
+      if(noun==="pendulum") return say("The brass pendulum swings... but the clock is stopped at midnight.",14);
+      return null;
+    }
+  }
+};
+
+/* =========================================================
+   PARSER
+   ========================================================= */
+function normalize(s){
+  return s.toLowerCase().replace(/[^a-z0-9 ']/g," ").replace(/\s+/g," ").trim();
+}
+const STOP = new Set(["the","a","an","at","to","with","on","of","up","my","look","please"]);
+
+function handleCommand(raw){
+  const room = rooms[game.room];
+  let s = normalize(raw);
+  if(!s) return;
+  let words = s.split(" ");
+  let verb = words[0];
+
+  // synonyms
+  const vsyn = {
+    l:"look", x:"look", examine:"look", inspect:"look", read:"look",
+    take:"get", grab:"get", pick:"get", g:"get",
+    i:"inventory", inv:"inventory", items:"inventory",
+    walk:"go", move:"go", enter:"go",
+    use:"use", give:"use",
+    open:"open", unlock:"open",
+    h:"help","?":"help", commands:"help",
+    n:"north", s:"south", e:"east", w:"west"
+  };
+  if(vsyn[verb]) verb = vsyn[verb];
+
+  let rest = words.slice(1).filter(w=>!STOP.has(w));
+  let noun = rest[0] || "";
+  // multiword nouns
+  const joined = rest.join(" ");
+  if(joined.includes("music")||joined.includes("box")) { if(joined!=="crate") noun = "music"; }
+  if(joined.includes("clock")) noun = "clock";
+  if(joined.includes("door")) noun = "door";
+  if(joined.includes("mat")) noun = "mat";
+  if(joined.includes("key")) noun = "key";
+
+  Sound.blip();
+
+  switch(verb){
+    case "help":
+      return say("VERBS: LOOK, GET, OPEN, USE, WIND, INVENTORY, GO. Move with ARROW KEYS. Walk into doorways/edges to travel.",11);
+
+    case "inventory":
+      if(game.inv.length===0) return say("You are carrying nothing but courage (and not much of that).",11);
+      return say("You are carrying: " + game.inv.map(id=>ITEMS[id].name).join(", ") + ".",11);
+
+    case "look": {
+      if(room.look){
+        const r = room.look(noun);
+        if(r!==null && r!==undefined) return;
+      }
+      return say("You see nothing special about that.",7);
+    }
+
+    case "get": {
+      // street: under the mat
+      if(game.room==="street"){
+        if(noun==="mat"||joined.includes("under")){
+          if(flag("mat_moved")) return say("You already searched under the mat.",7);
+          setFlag("mat_moved");
+          giveItem("key");
+          Sound.pickup();
+          return say("You lift the WELCOME mat. A tarnished BRASS KEY glints beneath it. Taken!",10);
+        }
+        if(noun==="key"){
+          if(hasItem("key")) return say("You already have the key.",7);
+          return say("You don't see a key out here. Maybe something is hidden nearby...",14);
+        }
+      }
+      if(game.room==="shop"){
+        if(noun==="music"){
+          if(flag("music_taken")) return say("You already took the music box.",7);
+          setFlag("music_taken"); giveItem("music"); Sound.pickup();
+          return say("You take the antique MUSIC BOX. It feels colder than it should.",10);
+        }
+        if(noun==="oil"||noun==="can") return say("You don't see an oil can here.",7);
+      }
+      if(!noun) return say("Get what, exactly?",7);
+      return say("You can't take that.",7);
+    }
+
+    case "open": {
+      if(game.room==="street" && (noun==="door"||!noun)){
+        if(flag("door_open")) return say("The door is already open. Walk UP to enter.",10);
+        if(hasItem("key")){
+          setFlag("door_open"); Sound.door();
+          return say("The brass key turns with a heavy CLUNK. The door swings open! Walk UP to enter.",10);
+        }
+        return say("It's locked. You need a key.",14);
+      }
+      if(game.room==="shop" && noun==="clock"){
+        if(flag("clock_open")) return say("It's already open. A passage yawns behind it.",10);
+        if(flag("clock_oiled")){
+          setFlag("clock_open"); Sound.chime();
+          return say("The case swings wide. Behind the clock is a hidden stair spiraling DOWN into darkness...",10);
+        }
+        return say("The case is RUSTED shut. You need to loosen it somehow (some OIL, perhaps?).",14);
+      }
+      if(noun==="music"||noun==="box") return say("Try WIND BOX instead.",7);
+      return say("You can't open that.",7);
+    }
+
+    case "use": {
+      if(noun==="key" && game.room==="street") return handleCommand("open door");
+      if(noun==="music"||noun==="box") return handleCommand("wind box");
+      if(noun==="oil" && game.room==="shop"){
+        return say("You don't have any oil. (This is a vertical slice — the oil can comes later!)",14);
+      }
+      return say("Nothing happens.",7);
+    }
+
+    case "wind": {
+      if((noun==="music"||noun==="box"||noun==="crank") ){
+        if(!hasItem("music")) return say("You don't have the music box.",7);
+        Sound.chime();
+        setFlag("music_wound");
+        return say("The music box tinkles a sad, familiar lullaby — Penelope used to hum it. The clock's PENDULUM shivers...",13);
+      }
+      if(noun==="clock") return say("You can't wind that creepy old clock by hand.",7);
+      return say("Wind what?",7);
+    }
+
+    case "go":
+    case "north": case "south": case "east": case "west": {
+      let dir = (verb==="go")? noun : verb;
+      if(game.room==="street"){
+        if(dir==="up"||dir==="north"||dir==="in"||dir==="inside"||dir==="shop"||noun==="door"){
+          if(flag("door_open")){ travel("shop"); return; }
+          return say("The door is closed. Try: OPEN DOOR.",14);
+        }
+      }
+      if(game.room==="shop"){
+        if(dir==="west"||dir==="left"||dir==="out"||dir==="exit"||dir==="street"){ travel("street"); return; }
+        if(dir==="down"||noun==="stair"||noun==="passage"){
+          if(flag("clock_open")) return winSlice();
+          return say("There's no way down... yet.",14);
+        }
+      }
+      return say("You can't go that way.",7);
+    }
+
+    default:
+      return say("I don't understand '"+raw.trim()+"'. Type HELP for verbs.",12), Sound.error();
+  }
+}
+
+/* =========================================================
+   TRAVEL between rooms
+   ========================================================= */
+function travel(id){
+  const r = rooms[id];
+  if(!r) return;
+  game.room = id;
+  game.px = r.enterX; game.py = r.enterY;
+  game.walking = false;
+  Sound.door();
+  say("You enter: "+r.name+".",11);
+}
+
+function winSlice(){
+  game.scene = "slice_end";
+  Sound.sting();
+}
+
+/* =========================================================
+   INPUT
+   ========================================================= */
+const keys = {};
+window.addEventListener("keydown", (e)=>{
+  // Title / end screens: Enter to advance
+  if(game.scene!=="play"){
+    if(e.key==="Enter"){
+      if(game.scene==="title"){ game.scene="play"; travel("street"); Sound.beep(); }
+      else if(game.scene==="slice_end"){ resetGame(); }
+    }
+    if(e.key==="m"||e.key==="M"){ Sound.toggleMute(); }
+    return;
+  }
+  // mute toggle
+  if((e.key==="m"||e.key==="M") && document.activeElement!==parserInput){
+    Sound.toggleMute(); return;
+  }
+  // arrow movement
+  if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)){
+    keys[e.key] = true; e.preventDefault();
+  }
+});
+window.addEventListener("keyup",(e)=>{ keys[e.key]=false; });
+
+// Parser input: a hidden text field captures typed commands.
+parserInput.addEventListener("keydown",(e)=>{ e.stopPropagation(); });
+parserInput.addEventListener("keyup",(e)=>{
+  e.stopPropagation();
+  if(e.key==="Enter"){
+    const v = parserInput.value;
+    parserInput.value="";
+    if(game.scene==="play" && v.trim()) handleCommand(v);
+  }
+});
+// Focus the parser whenever the user types a letter
+window.addEventListener("keydown",(e)=>{
+  if(game.scene!=="play") return;
+  if(e.key.length===1 && /[a-zA-Z0-9 '?]/.test(e.key) && document.activeElement!==parserInput){
+    parserInput.focus();
+  }
+});
+// click canvas to focus too
+canvas.addEventListener("mousedown",()=>{ if(game.scene==="play") parserInput.focus(); ensureAudioOnGesture(); });
+window.addEventListener("keydown", ensureAudioOnGesture, {once:false});
+let _titlePlayed=false;
+function ensureAudioOnGesture(){
+  if(game.scene==="title" && !_titlePlayed){ _titlePlayed=true; Sound.title(); }
+}
+
+/* =========================================================
+   UPDATE & RENDER LOOP
+   ========================================================= */
+const SPEED = 1.4;
+let stepTimer = 0;
+function update(){
+  if(game.scene!=="play") return;
+  const room = rooms[game.room];
+  const wb = room.walk;
+  let moving = false;
+  let dx=0, dy=0;
+  if(keys.ArrowLeft){ dx-=SPEED; game.facing=-1; }
+  if(keys.ArrowRight){ dx+=SPEED; game.facing=1; }
+  if(keys.ArrowUp){ dy-=SPEED; }
+  if(keys.ArrowDown){ dy+=SPEED; }
+  if(dx||dy){
+    moving=true;
+    game.px += dx; game.py += dy;
+    // clamp feet to walkbox (py is top of sprite; sprite 19 tall)
+    const footY = game.py + 19;
+    if(game.px < wb.x) game.px = wb.x;
+    if(game.px > wb.x+wb.w-11) game.px = wb.x+wb.w-11;
+    if(footY < wb.y) game.py = wb.y-19;
+    if(footY > wb.y+wb.h) game.py = wb.y+wb.h-19;
+
+    // EDGE-TRIGGERED TRAVEL
+    if(game.room==="street"){
+      // walk up to the door region opens transition
+      if(flag("door_open") && game.px>146 && game.px<188 && game.py+19 < 150){
+        // need to be near the door horizontally and pushing up
+        if(keys.ArrowUp){ travel("shop"); }
+      }
+    }
+    if(game.room==="shop"){
+      if(game.px <= wb.x+2){ travel("street"); }
+      if(flag("clock_open") && game.px>150 && game.px<196 && keys.ArrowUp){ winSlice(); }
+    }
+  }
+  game.walking = moving;
+  if(moving){
+    stepTimer++;
+    if(stepTimer% 8===0){ game.walkPhase ^=1; Sound.footstep(); }
+  } else { game.walkPhase=0; }
+
+  if(game.msgTimer>0) game.msgTimer--;
+}
+
+function drawHUD(){
+  // bottom message/parser bar
+  rect(0,160,W,40, 0);
+  rect(0,160,W,1, 8);
+  // message (wrapped, 2-3 lines)
+  const lines = wrap(game.msg || "", 51).slice(0,3);
+  let yy=164;
+  for(const ln of lines){ text(ln, 6, yy, (game.msgTimer>0?game.textColor:7)); yy+=8; }
+  // prompt line
+  text("> "+(parserInput.value.toUpperCase()), 6, 190, 10);
+  // blinking cursor
+  if(((performance.now()/400)|0)%2===0){
+    rect(6 + textWidth("> "+parserInput.value), 190, 5, 7, 10);
+  }
+}
+
+function renderPlay(){
+  const room = rooms[game.room];
+  room.draw();
+  // draw Hugo
+  const frame = (game.walking && game.walkPhase) ? HUGO_B : HUGO_A;
+  drawSprite(frame, game.px|0, game.py|0, game.facing<0);
+  drawHUD();
+}
+
+function renderTitle(){
+  clear(0);
+  // border
+  rect(0,0,W,8,4); rect(0,H-8,W,8,4); rect(0,0,8,H,4); rect(W-8,0,8,H,4);
+  dither(0,0,W,8,4,12); dither(0,H-8,W,8,12,4);
+  // spooky house silhouette
+  rect(110,70,100,60,8);
+  rect(120,50,80,24,8);
+  // roof
+  for(let i=0;i<40;i++){ rect(130-i,72-i,2,2,0); rect(190+i,72-i,2,2,0); }
+  rect(150,60,20,70,0);  // door col
+  rect(124,80,12,12,14); rect(184,80,12,12,14); // lit windows
+  rect(150,100,20,30,6); // door
+  // a single floating antique: a clock
+  rect(40,90,26,60,6); rect(43,93,20,20,15); rect(48,140,10,8,14);
+  text("TICK", 36,76, 7);
+  // title text
+  textCentered("HUGO IV", 24, 14);
+  textCentered("THE ANTIQUE SHOP", 36, 12);
+  textCentered("OF HORRORS", 46, 12);
+  // tagline
+  textCentered("AN UNOFFICIAL EGA ADVENTURE", 158, 7);
+  // prompt blink
+  if(((performance.now()/500)|0)%2===0){
+    textCentered("PRESS ENTER TO BEGIN", 176, 15);
+  }
+  textCentered("(M = TOGGLE SOUND)", 186, 8);
+}
+
+function renderSliceEnd(){
+  clear(0);
+  rect(0,0,W,8,5); rect(0,H-8,W,8,5);
+  textCentered("THE HIDDEN STAIR", 30, 14);
+  const body = "Behind the cursed grandfather clock, a stone stair spirals down into the dark. Penelope's lullaby still echoes from the music box in your pocket. Somewhere below, something is waiting...";
+  const lines = wrap(body, 46);
+  let y=58;
+  for(const ln of lines){ textCentered(ln, y, 11); y+=10; }
+  textCentered("END OF DEMO SLICE", y+14, 12);
+  if(((performance.now()/500)|0)%2===0)
+    textCentered("PRESS ENTER TO PLAY AGAIN", y+34, 15);
+}
+
+function resetGame(){
+  game.scene="title";
+  game.room="street";
+  game.inv=[]; game.flags={};
+  game.px=150; game.py=150; game.facing=1;
+  game.msg=""; game.msgTimer=0;
+  _titlePlayed=false;
+}
+
+function frame(){
+  update();
+  if(game.scene==="title") renderTitle();
+  else if(game.scene==="slice_end") renderSliceEnd();
+  else renderPlay();
+  requestAnimationFrame(frame);
+}
+
+/* boot */
+resetGame();
+say("Welcome to YE OLDE ANTIQUES.",14);
+frame();
+</script>
+</body>
+</html>
