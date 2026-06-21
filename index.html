@@ -16,25 +16,56 @@
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
   }
+  #stage {
+    position: relative;
+    display: inline-block;
+    box-shadow: 0 0 0 2px #555, 0 0 40px #000;
+    background: #000;
+  }
   #screen {
+    display: block;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
     background: #000;
-    box-shadow: 0 0 0 2px #555, 0 0 24px #000 inset;
+  }
+  /* CRT scanline + vignette overlay */
+  #crt {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at center,
+        rgba(0,0,0,0) 55%, rgba(0,0,0,0.45) 100%),
+      repeating-linear-gradient(
+        to bottom,
+        rgba(0,0,0,0.0) 0px,
+        rgba(0,0,0,0.0) 2px,
+        rgba(0,0,0,0.28) 3px,
+        rgba(0,0,0,0.28) 4px);
+    mix-blend-mode: multiply;
+    animation: flicker 5s infinite steps(60);
+  }
+  #crt.off { display:none; }
+  @keyframes flicker {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.94; }
+    52% { opacity: 1; }
   }
   #hint {
     margin-top: 8px; font-size: 12px; color: #555;
-    text-align: center; user-select: none;
+    text-align: center; user-select: none; line-height: 1.5;
   }
-  #parser {
-    position: absolute; left: -9999px;
-  }
+  #parser { position: absolute; left: -9999px; }
 </style>
 </head>
 <body>
 <div id="wrap">
-  <canvas id="screen" width="320" height="200"></canvas>
-  <div id="hint">Arrow keys = walk &nbsp;•&nbsp; Type a command + Enter &nbsp;•&nbsp; Try: LOOK, HELP, INVENTORY</div>
+  <div id="stage">
+    <canvas id="screen" width="320" height="200"></canvas>
+    <div id="crt"></div>
+  </div>
+  <div id="hint">Arrow keys = walk &nbsp;•&nbsp; Type a command + Enter &nbsp;•&nbsp; LOOK / GET / OPEN / USE / WIND / SAVE / LOAD / HELP<br>
+  M = sound &nbsp;•&nbsp; T = CRT filter</div>
   <input id="parser" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
 </div>
 <script>
@@ -45,6 +76,7 @@
    - 320x200, 16-color EGA palette, nearest-neighbor scaling
    - Sierra-style: walk with arrows, type parser commands
    - PC-speaker-style sound via Web Audio square waves
+   - Death/respawn, save/restore (localStorage), CRT shader
    ============================================================ */
 
 /* ---------- EGA 16-color palette ---------- */
@@ -62,9 +94,10 @@ const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 const parserInput = document.getElementById("parser");
+const crtEl = document.getElementById("crt");
 
 function fitScreen() {
-  const margin = 70;
+  const margin = 90;
   const scale = Math.max(1, Math.floor(Math.min(
     (window.innerWidth) / W,
     (window.innerHeight - margin) / H
@@ -86,7 +119,6 @@ function line(x1,y1,x2,y2,c){
   ctx.lineTo((x2|0)+0.5,(y2|0)+0.5);
   ctx.stroke();
 }
-// dithered fill: classic EGA checkerboard of two colors
 function dither(x,y,w,h,c1,c2){
   for(let j=0;j<h;j++)for(let i=0;i<w;i++){
     px(x+i,y+j, ((i+j)&1)?c1:c2);
@@ -94,7 +126,6 @@ function dither(x,y,w,h,c1,c2){
 }
 
 /* ---------- Bitmap font (5x7) ---------- */
-// Minimal uppercase font; lowercase mapped to uppercase glyphs.
 const FONT = {
  'A':["01110","10001","10001","11111","10001","10001","10001"],
  'B':["11110","10001","11110","10001","10001","10001","11110"],
@@ -161,7 +192,6 @@ function text(str,x,y,c){
 }
 function textWidth(str){ return (str||"").length*6; }
 function textCentered(str,y,c){ text(str, ((W - textWidth(str))/2)|0, y, c); }
-// word-wrap into lines of max chars
 function wrap(str, maxChars){
   const words = (str||"").split(" ");
   const lines = []; let cur = "";
@@ -179,8 +209,7 @@ function wrap(str, maxChars){
    SOUND: PC-speaker style square-wave beeper (Web Audio)
    ========================================================= */
 const Sound = (() => {
-  let actx = null;
-  let muted = false;
+  let actx = null, muted = false;
   function ensure(){
     if(!actx){
       try { actx = new (window.AudioContext||window.webkitAudioContext)(); }
@@ -189,7 +218,6 @@ const Sound = (() => {
     if(actx && actx.state === "suspended") actx.resume();
     return actx;
   }
-  // play a single square tone
   function tone(freq, dur, when, vol){
     const a = ensure(); if(!a || muted) return;
     const t = (when==null? a.currentTime : when);
@@ -204,14 +232,10 @@ const Sound = (() => {
     osc.connect(g); g.connect(a.destination);
     osc.start(t); osc.stop(t+dur+0.01);
   }
-  // play a sequence: [[freq,durSeconds],...]  (freq 0 = rest)
   function play(seq, vol){
     const a = ensure(); if(!a) return;
     let t = a.currentTime + 0.01;
-    for(const [f,d] of seq){
-      if(f>0) tone(f, d*0.92, t, vol);
-      t += d;
-    }
+    for(const [f,d] of seq){ if(f>0) tone(f, d*0.92, t, vol); t += d; }
   }
   return {
     beep(){ tone(880,0.05); },
@@ -221,79 +245,56 @@ const Sound = (() => {
     door(){ play([[300,0.07],[240,0.09]],0.12); },
     footstep(){ tone(110,0.025,null,0.05); },
     chime(){ play([[1047,0.08],[0,0.02],[1319,0.08],[0,0.02],[1568,0.16]]); },
-    sting(){ play([[330,0.10],[311,0.10],[294,0.30]],0.13); }, // ominous
-    title(){
-      // a short spooky-jaunty theme in square wave
-      const Q=0.18, E=0.09;
-      play([
-        [392,Q],[392,E],[440,E],[523,Q],[440,Q],
-        [392,E],[349,E],[392,Q],[0,E],
-        [330,Q],[349,E],[392,E],[440,Q],[392,Q],
-        [330,Q],[294,Q],[262,Q+E]
-      ], 0.09);
+    sting(){ play([[330,0.10],[311,0.10],[294,0.30]],0.13); },
+    death(){ play([[392,0.14],[370,0.14],[349,0.14],[330,0.45]],0.14); },
+    fanfare(){ play([[523,0.12],[659,0.12],[784,0.12],[1047,0.30],[0,0.05],[784,0.12],[1047,0.40]],0.11); },
+    lullaby(){
+      const Q=0.22,E=0.11;
+      play([[659,Q],[587,E],[523,E],[587,Q],[659,Q],[659,Q],[659,Q+E],
+            [587,Q],[587,Q],[587,Q+E],[659,Q],[784,Q],[784,Q+E]],0.085);
     },
-    toggleMute(){ muted = !muted; return muted; }
+    title(){
+      const Q=0.18, E=0.09;
+      play([[392,Q],[392,E],[440,E],[523,Q],[440,Q],[392,E],[349,E],[392,Q],[0,E],
+            [330,Q],[349,E],[392,E],[440,Q],[392,Q],[330,Q],[294,Q],[262,Q+E]], 0.09);
+    },
+    toggleMute(){ muted = !muted; return muted; },
+    isMuted(){ return muted; }
   };
 })();
 
 /* =========================================================
-   SPRITE: Hugo (drawn from a pixel map, 2 walk frames)
-   color key -> EGA index; '.' = transparent
+   SPRITES (pixel maps); '.' = transparent
    ========================================================= */
 const SPR = {
-  '.':-1,'H':6,'h':8,'F':14,'S':12,'s':4,'P':1,'p':9,'B':0,'W':15,'k':0
+  '.':-1,'H':6,'h':8,'F':14,'S':12,'s':4,'P':1,'p':9,'B':0,'W':15,'k':0,
+  'D':13,'d':5,'Y':14,'G':10
 };
-// 11 wide x 19 tall
 const HUGO_A = [
-  "...HHHHH...",
-  "..HHHHHHH..",
-  "..HhFFFhh..",
-  "..hFFFFFh..",
-  "..hFBFBFh..",
-  "..hFFFFFh..",
-  "...hFFFh...",
-  "..WWSSSWW..",
-  ".WSSSSSSSW.",
-  "WSSSSSSSSSW",
-  "WSsSSSSSsSW",
-  ".SSSSSSSSS.",
-  "..SSSSSSS..",
-  "..PPP.PPP..",
-  "..PPP.PPP..",
-  "..PPP.PPP..",
-  "..PP...PP..",
-  "..kk...kk..",
-  ".kkk...kkk."
+  "...HHHHH...","..HHHHHHH..","..HhFFFhh..","..hFFFFFh..","..hFBFBFh..",
+  "..hFFFFFh..","...hFFFh...","..WWSSSWW..",".WSSSSSSSW.","WSSSSSSSSSW",
+  "WSsSSSSSsSW",".SSSSSSSSS.","..SSSSSSS..","..PPP.PPP..","..PPP.PPP..",
+  "..PPP.PPP..","..PP...PP..","..kk...kk..",".kkk...kkk."
 ];
 const HUGO_B = [
-  "...HHHHH...",
-  "..HHHHHHH..",
-  "..HhFFFhh..",
-  "..hFFFFFh..",
-  "..hFBFBFh..",
-  "..hFFFFFh..",
-  "...hFFFh...",
-  "..WWSSSWW..",
-  ".WSSSSSSSW.",
-  "WSSSSSSSSSW",
-  "WSsSSSSSsSW",
-  ".SSSSSSSSS.",
-  "..SSSSSSS..",
-  "..PPP.PPP..",
-  "..PPP.PPP..",
-  "...PP.PP...",
-  "...PP.PP...",
-  "..kk...kk..",
-  "..kkk.kkk.."
+  "...HHHHH...","..HHHHHHH..","..HhFFFhh..","..hFFFFFh..","..hFBFBFh..",
+  "..hFFFFFh..","...hFFFh...","..WWSSSWW..",".WSSSSSSSW.","WSSSSSSSSSW",
+  "WSsSSSSSsSW",".SSSSSSSSS.","..SSSSSSS..","..PPP.PPP..","..PPP.PPP..",
+  "...PP.PP...","...PP.PP...","..kk...kk..","..kkk.kkk.."
+];
+// Penelope: yellow hair, magenta dress
+const PEN = [
+  "...YYYYY...","..YYYYYYY..","..YhFFFhY..","..hFFFFFh..","..hFBFBFh..",
+  "..hFFFFFh..","...hFFFh...","...DDDDD...","..DDDDDDD..",".DDDDDDDDD.",
+  "DDDDDDDDDDD","DDDDdDDDDDD",".DDDDDDDDD.",".DDDDDDDDD.","..DDDDDDD..",
+  "..DDDDDDD..","...DDDDD...","...k...k...","..kk...kk.."
 ];
 function drawSprite(map,x,y,flip){
   const h = map.length, w = map[0].length;
-  for(let j=0;j<h;j++){
-    for(let i=0;i<w;i++){
-      const ch = map[j][flip ? (w-1-i) : i];
-      const c = SPR[ch];
-      if(c>=0) px(x+i, y+j, c);
-    }
+  for(let j=0;j<h;j++) for(let i=0;i<w;i++){
+    const ch = map[j][flip ? (w-1-i) : i];
+    const c = SPR[ch];
+    if(c>=0) px(x+i, y+j, c);
   }
 }
 
@@ -301,100 +302,123 @@ function drawSprite(map,x,y,flip){
    GAME STATE
    ========================================================= */
 const game = {
-  scene: "title",        // title | play | gameover
+  scene: "title",   // title | play | dead | win | slice (unused)
   room: "street",
-  // player position (feet anchor roughly at px+5, py+19)
   px: 150, py: 150,
-  facing: 1,             // 1 right, -1 left
+  facing: 1,
   walking: false, walkPhase: 0,
-  inv: [],
-  flags: {},
-  msg: "",
-  msgTimer: 0,
-  textColor: 15
+  inv: [], flags: {},
+  msg: "", msgTimer: 0, textColor: 15,
+  deathCause: ""
 };
 function flag(k){ return !!game.flags[k]; }
 function setFlag(k,v){ game.flags[k] = (v===undefined?true:v); }
 function hasItem(id){ return game.inv.includes(id); }
-function giveItem(id){ if(!hasItem(id)){ game.inv.push(id); } }
+function giveItem(id){ if(!hasItem(id)) game.inv.push(id); }
 function takeItem(id){ game.inv = game.inv.filter(x=>x!==id); }
-
 function say(s, color){
   game.msg = s;
-  game.msgTimer = Math.max(180, s.length*4);
+  game.msgTimer = Math.max(220, s.length*4);
   game.textColor = color==null?15:color;
 }
 
 /* =========================================================
-   ROOMS
-   Each room: draw(), walkbox {x,y,w,h}, exits, look (parser)
+   SAVE / RESTORE (localStorage)
+   ========================================================= */
+const SAVE_KEY = "hugo4_save_v1";
+function saveGame(){
+  try{
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      room:game.room, px:game.px, py:game.py, facing:game.facing,
+      inv:game.inv, flags:game.flags
+    }));
+    return true;
+  }catch(e){ return false; }
+}
+function hasSave(){ try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; } }
+function loadGame(){
+  try{
+    const s = localStorage.getItem(SAVE_KEY); if(!s) return false;
+    const d = JSON.parse(s);
+    game.room=d.room; game.px=d.px; game.py=d.py; game.facing=d.facing||1;
+    game.inv=d.inv||[]; game.flags=d.flags||{};
+    game.scene="play"; game.walking=false;
+    return true;
+  }catch(e){ return false; }
+}
+
+/* =========================================================
+   DEATH & RESPAWN
+   ========================================================= */
+function die(cause){
+  game.deathCause = cause;
+  game.scene = "dead";
+  Sound.death();
+}
+function respawn(){
+  // Forgiving: keep inventory & flags, return to a safe spot in the room.
+  const r = rooms[game.room];
+  game.px = r.enterX; game.py = r.enterY;
+  game.scene = "play"; game.walking = false;
+  say("You pull yourself together. That was close.",11);
+}
+
+/* =========================================================
+   ITEMS
    ========================================================= */
 const ITEMS = {
   key:   { name:"a brass key" },
   oil:   { name:"an oil can" },
-  coin:  { name:"a tarnished silver coin" },
+  coin:  { name:"a silver coin" },
   music: { name:"an antique music box" }
 };
 
+/* =========================================================
+   ROOMS
+   ========================================================= */
 const rooms = {
   /* ---------------- STREET ---------------- */
   street: {
     name:"Cobblestone Street",
-    walk:{x:8,y:140,w:304,h:48},
-    enterX:150, enterY:150,
-    exits:{},
+    walk:{x:8,y:140,w:304,h:48}, enterX:150, enterY:150,
     draw(){
-      // sky
       rect(0,0,W,120, 1);
-      // moon
       rect(255,16,22,22,15); rect(252,20,22,16,15);
       rect(268,14,8,8,1); rect(264,28,6,6,1);
-      // distant rooftops
       for(let i=0;i<W;i+=40){ rect(i,96,30,24,8); rect(i+6,86,4,12,8); }
-      // the antique shop building
       rect(60,40,200,80, 6);
-      rect(60,40,200,80, 6);
-      // brick dither
-      for(let y=40;y<118;y+=8){ for(let x=60;x<260;x+=16){ rect(x,y,15,1,8); } }
+      for(let y=40;y<118;y+=8) for(let x=60;x<260;x+=16) rect(x,y,15,1,8);
       for(let x=60;x<260;x+=16) rect(x,40,1,78,8);
-      // shop sign
-      rect(96,30,128,16, 0);
       rect(96,30,128,16, 0);
       text("YE OLDE ANTIQUES", 100, 35, 14);
-      // window with glow
       dither(76,64,48,36, 6,14);
-      rect(76,64,48,36, 0); // frame redraw
+      rect(76,64,48,36, 0);
       dither(78,66,44,32, 14,6);
       line(100,66,100,98,0); line(78,82,122,82,0);
-      // door
-      rect(150,72,40,48, 8);
       rect(150,72,40,48, 8);
       rect(152,74,36,44, 6);
-      rect(182,94,4,4,14); // knob
-      // doormat
+      rect(182,94,4,4,14);
       rect(150,124,40,8, flag("mat_moved")?6:4);
       if(!flag("mat_moved")) text("WELCOME", 152,125, 15);
-      // ground
       rect(0,120,W,80, 8);
-      for(let y=124;y<H;y+=10) for(let x=(y%20);x<W;x+=20){ rect(x,y,9,1,7); }
-      // lamp post
+      for(let y=124;y<H;y+=10) for(let x=(y%20);x<W;x+=20) rect(x,y,9,1,7);
       rect(28,70,4,52,0); rect(20,64,20,10,14); rect(24,60,12,6,0);
     },
     look(noun){
-      if(!noun||noun==="around"||noun==="street") return say("A foggy cobblestone street. YE OLDE ANTIQUES looms ahead, its door shut. A WELCOME mat lies at the step.",14);
+      if(!noun||noun==="around"||noun==="street") return say("A foggy cobblestone street. YE OLDE ANTIQUES looms ahead. A WELCOME mat lies at the step.",14);
       if(noun==="shop"||noun==="building"||noun==="antiques"||noun==="store") return say("A crooked old antique shop. The sign creaks in the wind. The DOOR is closed.",14);
       if(noun==="mat"||noun==="doormat"||noun==="welcome"){
         if(flag("mat_moved")) return say("Just a plain mat now. You already found what was under it.",7);
-        return say("A frayed WELCOME mat. It looks like something might be hidden UNDER it.",14);
+        return say("A frayed WELCOME mat. Something might be hidden UNDER it.",14);
       }
       if(noun==="door"){
         if(flag("door_open")) return say("The shop door stands open. Walk UP to go inside.",10);
-        if(hasItem("key")) return say("A heavy oak door, locked. Maybe your brass KEY fits. Try: OPEN DOOR.",14);
-        return say("A heavy oak door. It's locked tight. You'll need a key.",14);
+        if(hasItem("key")) return say("A heavy oak door, locked. Your brass KEY might fit. Try: OPEN DOOR.",14);
+        return say("A heavy oak door. Locked tight. You'll need a key.",14);
       }
       if(noun==="moon") return say("A pale full moon. Of course it's a full moon.",7);
       if(noun==="window") return say("Dusty glass. Vague shapes of furniture lurk within.",14);
-      if(noun==="sign") return say("'YE OLDE ANTIQUES — Est. a very long time ago.'",14);
+      if(noun==="sign") return say("'YE OLDE ANTIQUES - Est. a very long time ago.'",14);
       if(noun==="lamp"||noun==="lamppost"||noun==="light") return say("A gas lamp flickers, fighting the fog.",14);
       return null;
     }
@@ -403,72 +427,166 @@ const rooms = {
   /* ---------------- SHOP INTERIOR ---------------- */
   shop: {
     name:"Inside the Antique Shop",
-    walk:{x:8,y:150,w:304,h:38},
-    enterX:40, enterY:158,
-    exits:{},
+    walk:{x:8,y:150,w:304,h:38}, enterX:40, enterY:158,
     draw(){
-      // back wall
-      rect(0,0,W,160, 6);
-      dither(0,0,W,160, 6,8);
-      // floor boards
+      rect(0,0,W,160, 6); dither(0,0,W,160, 6,8);
       rect(0,160,W,40, 8);
       for(let x=0;x<W;x+=24) rect(x,160,1,40,0);
       rect(0,160,W,2,0);
-      // exit doorway (to street) left
-      rect(8,96,40,64, 0);
-      rect(12,100,32,56, 1);
+      rect(8,96,40,64, 0); rect(12,100,32,56, 1);
       text("EXIT", 14,120, 14);
-      // shelf with music box
       rect(210,70,90,10, 0); rect(210,80,90,2,8);
       if(!flag("music_taken")){
-        // music box
         rect(238,52,28,18, 5); rect(238,52,28,4,13);
-        rect(244,46,16,6,14); // lid
-        rect(250,40,4,8,7);    // crank
+        rect(244,46,16,6,14); rect(250,40,4,8,7);
       }
-      // grandfather clock (the cursed antique) center-right
-      rect(150,40,44,118, 6);
-      rect(150,40,44,118, 6);
-      rect(152,42,40,114, 0);
-      rect(154,44,36,40, 1);       // glass face
-      // clock face
+      // grandfather clock (the cursed antique)
+      rect(150,40,44,118, 6); rect(152,42,40,114, 0);
+      rect(154,44,36,40, 1);
       rect(160,50,24,24, 15);
-      rect(171,52,2,10,0); line(172,62,172,55,0); // hour hand drawn separately
-      // hands
-      line(172,62,172,54,0);
-      line(172,62,180,62, 0);
-      // pendulum window
-      rect(162,92,20,56, 1);
-      rect(170,96,4,44,14);
-      rect(166,140,12,8,14); // bob
-      // a crate
-      rect(60,128,40,32, 6); rect(60,128,40,32,6);
-      rect(60,128,40,2,14); rect(60,158,40,2,0);
+      line(172,62,172,54,0); line(172,62,180,62, 0);
+      rect(162,92,20,56, 1); rect(170,96,4,44,14); rect(166,140,12,8,14);
+      if(flag("clock_open")){ rect(154,44,36,112, 0); rect(160,60,24,90,1);
+        text("DOWN", 162, 96, 11); }
+      // crate
+      rect(60,128,40,32, 6); rect(60,128,40,2,14); rect(60,158,40,2,0);
       line(60,128,100,160,8); line(100,128,60,160,8);
-      // cobwebs
-      line(0,0,30,30,7); line(30,0,0,30,7);
-      line(W,0,W-30,30,7);
-      // sign over exit handled by text
-      // dim title
+      // oil can on the floor by the crate
+      if(!flag("oil_taken")){
+        rect(108,150,12,8,8); rect(110,146,4,4,7); rect(118,148,5,2,8);
+      }
+      line(0,0,30,30,7); line(30,0,0,30,7); line(W,0,W-30,30,7);
       text("DUSTY ANTIQUES EVERYWHERE", 70, 8, 14);
     },
     look(noun){
-      if(!noun||noun==="around"||noun==="shop"||noun==="room") return say("A cramped shop crammed with relics. A GRANDFATHER CLOCK ticks in the gloom. A SHELF holds a small box. An EXIT leads back to the street.",14);
+      if(!noun||noun==="around"||noun==="shop"||noun==="room") return say("A cramped shop crammed with relics. A GRANDFATHER CLOCK ticks in the gloom. A SHELF holds a small box. An OIL CAN sits by a CRATE. EXIT is left.",14);
       if(noun==="clock"||noun==="grandfather"){
-        if(flag("clock_open")) return say("The clock's case hangs open, revealing a dark passage behind it...",10);
-        if(flag("clock_oiled")) return say("The clock's case is unstuck now. Try: OPEN CLOCK.",14);
-        return say("A towering grandfather clock. The case door is RUSTED shut. The hands point to midnight.",14);
+        if(flag("clock_open")) return say("The clock's case hangs open, revealing a stair spiraling DOWN into darkness.",10);
+        if(flag("clock_oiled")) return say("The clock's hinges glisten with oil now. Try: OPEN CLOCK.",14);
+        return say("A towering grandfather clock. The case door is RUSTED shut. Some oil might help.",14);
       }
       if(noun==="shelf") return say(flag("music_taken")?"An empty dusty shelf.":"A high shelf holding a small ornate MUSIC BOX.",14);
       if(noun==="music"||noun==="box"||noun==="musicbox"){
-        if(flag("music_taken")&&hasItem("music")) return say("The antique music box. Try: WIND BOX, or USE BOX.",14);
+        if(hasItem("music")) return say("The antique music box. Try: WIND BOX.",14);
         if(flag("music_taken")) return say("You don't see it here.",7);
         return say("An ornate music box with a tiny crank. Try: GET BOX.",14);
       }
-      if(noun==="crate"||noun==="box2") return say("A wooden crate, nailed shut. Faintly you hear something scratching inside. Best not.",14);
-      if(noun==="exit"||noun==="door") return say("The doorway back to the street. Walk LEFT into it to leave.",14);
+      if(noun==="oil"||noun==="can"||noun==="oilcan"){
+        if(hasItem("oil")) return say("Your trusty oil can. Good for squeaky, rusted, cursed hinges.",14);
+        if(flag("oil_taken")) return say("You already grabbed the oil can.",7);
+        return say("A dented OIL CAN on the floor. Try: GET OIL.",14);
+      }
+      if(noun==="crate"){
+        return say("A wooden crate, nailed shut. Something SCRATCHES inside. You probably shouldn't OPEN it.",14);
+      }
+      if(noun==="exit"||noun==="door") return say("The doorway back to the street, to your left.",14);
       if(noun==="web"||noun==="cobweb"||noun==="cobwebs") return say("Thick cobwebs. The spiders have good taste in real estate.",7);
-      if(noun==="pendulum") return say("The brass pendulum swings... but the clock is stopped at midnight.",14);
+      if(noun==="pendulum") return say("The brass pendulum hangs still. The clock is stopped at midnight.",14);
+      return null;
+    }
+  },
+
+  /* ---------------- CATACOMBS ---------------- */
+  catacombs: {
+    name:"The Catacombs",
+    walk:{x:8,y:150,w:304,h:38}, enterX:30, enterY:158,
+    draw(){
+      rect(0,0,W,160,0); dither(0,0,W,160,8,0);
+      rect(0,160,W,40,8);
+      for(let x=0;x<W;x+=32) rect(x,160,1,40,0);
+      rect(0,160,W,2,0);
+      // stair up (left)
+      rect(6,96,34,64,0); text("UP", 14,118, 11);
+      for(let i=0;i<6;i++) rect(10,150-i*8,28,4,7);
+      // flickering torches
+      const fl = (Math.sin(performance.now()/120)>0)?12:14;
+      rect(96,60,4,16,6); rect(92,52,12,10,fl); rect(95,48,6,6,15);
+      rect(220,60,4,16,6); rect(216,52,12,10,fl); rect(219,48,6,6,15);
+      // sarcophagus
+      rect(120,118,70,40,8); rect(120,118,70,40,8);
+      rect(122,120,66,36,7);
+      // lid skull
+      rect(140,124,30,16,15);
+      rect(146,128,4,4,0); rect(160,128,4,4,0); rect(152,133,6,4,0);
+      if(flag("coin_taken")===false && flag("sarc_looked")){
+        rect(176,116,7,7,14); rect(177,117,5,5,7); // coin on lid
+      }
+      // barred gate (right)
+      rect(264,80,48,80, 6);
+      rect(264,80,48,80, 6);
+      if(flag("gate_open")){
+        rect(266,82,44,76,0); text("EAST",272,116,11);
+      } else {
+        rect(266,82,44,76,0);
+        for(let x=270;x<308;x+=8) rect(x,82,3,76,7);
+        for(let y=86;y<158;y+=18) rect(266,y,44,3,7);
+        // coin slot
+        rect(284,120,8,3,14); text("SLOT",270,166,14);
+      }
+      text("COLD STONE AND OLD BONES", 70, 8, 7);
+    },
+    look(noun){
+      if(!noun||noun==="around"||noun==="catacombs"||noun==="room") return say("Damp catacombs beneath the shop. Torches gutter. A stone SARCOPHAGUS squats here; a barred GATE blocks the way EAST. Stairs lead UP.",7);
+      if(noun==="sarcophagus"||noun==="sarc"||noun==="coffin"||noun==="tomb"){
+        setFlag("sarc_looked");
+        if(flag("coin_taken")) return say("The heavy stone sarcophagus. Its carved skull seems to watch you. Best leave the lid shut.",14);
+        return say("A stone sarcophagus. A tarnished SILVER COIN rests on its lid. (Opening the lid would be... unwise.)",14);
+      }
+      if(noun==="coin"||noun==="silver"){
+        if(hasItem("coin")) return say("A silver coin, cold as the grave. It might fit a SLOT somewhere.",14);
+        if(flag("coin_taken")) return say("You already took the coin.",7);
+        if(flag("sarc_looked")) return say("It sits on the sarcophagus lid. Try: GET COIN.",14);
+        return say("LOOK at the SARCOPHAGUS first.",7);
+      }
+      if(noun==="gate"||noun==="bars"){
+        if(flag("gate_open")) return say("The gate stands open. Walk EAST into the crypt.",10);
+        return say("An iron gate, barred. There's a COIN SLOT set into it. Try: USE COIN.",14);
+      }
+      if(noun==="slot") return say("A narrow slot in the gate, coin-sized. Try: USE COIN.",14);
+      if(noun==="torch"||noun==="torches") return say("Pitch torches throw jumping shadows on the bones.",14);
+      if(noun==="stair"||noun==="stairs"||noun==="up") return say("The spiral stair winds back UP to the antique shop.",14);
+      return null;
+    }
+  },
+
+  /* ---------------- CRYPT (finale) ---------------- */
+  crypt: {
+    name:"The Forgotten Crypt",
+    walk:{x:40,y:150,w:240,h:38}, enterX:50, enterY:158,
+    draw(){
+      rect(0,0,W,160,0); dither(0,0,W,160,1,0);
+      rect(0,160,W,40,8); rect(0,160,W,2,0);
+      for(let x=0;x<W;x+=32) rect(x,160,1,40,0);
+      // gate back (left)
+      rect(8,96,30,64,0); text("WEST",10,118,11);
+      // candles
+      for(const cx of [70,250]){
+        rect(cx,120,4,30,15);
+        const f=(Math.sin(performance.now()/100+cx)>0)?14:12;
+        rect(cx-1,112,6,8,f);
+      }
+      // altar with glass case holding Penelope
+      rect(120,120,80,40,8); rect(120,120,80,4,7);
+      // glass case
+      rect(132,70,56,52, flag("freed")?0:11);
+      rect(132,70,56,52, 11); // frame
+      rect(134,72,52,48, flag("freed")?0:3);
+      if(!flag("freed")){
+        // Penelope asleep inside
+        drawSprite(PEN, 148, 78, false);
+        // zzz
+        text("Z", 176,76,15);
+      }
+      text("THE FORGOTTEN CRYPT", 96, 8, 13);
+      if(flag("freed")) text("PENELOPE IS FREE!", 100, 20, 14);
+    },
+    look(noun){
+      if(!noun||noun==="around"||noun==="crypt"||noun==="room") return say("A candlelit crypt. On the altar, PENELOPE sleeps inside an enchanted GLASS CASE. The way back is WEST.",13);
+      if(noun==="penelope"||noun==="girl"||noun==="case"||noun==="glass"||noun==="altar"){
+        if(flag("freed")) return say("Penelope, awake and beaming at you. 'Hugo! You came!'",14);
+        return say("Penelope sleeps under a curse, sealed in glass. No lock, no latch... only silence. If only you could play her lullaby.",13);
+      }
+      if(noun==="candle"||noun==="candles") return say("Black candles burn with a cold blue flame.",11);
       return null;
     }
   }
@@ -480,7 +598,7 @@ const rooms = {
 function normalize(s){
   return s.toLowerCase().replace(/[^a-z0-9 ']/g," ").replace(/\s+/g," ").trim();
 }
-const STOP = new Set(["the","a","an","at","to","with","on","of","up","my","look","please"]);
+const STOP = new Set(["the","a","an","at","to","with","on","of","up","my","look","please","in","into"]);
 
 function handleCommand(raw){
   const room = rooms[game.room];
@@ -489,61 +607,66 @@ function handleCommand(raw){
   let words = s.split(" ");
   let verb = words[0];
 
-  // synonyms
   const vsyn = {
     l:"look", x:"look", examine:"look", inspect:"look", read:"look",
     take:"get", grab:"get", pick:"get", g:"get",
     i:"inventory", inv:"inventory", items:"inventory",
     walk:"go", move:"go", enter:"go",
-    use:"use", give:"use",
+    use:"use", insert:"use", put:"use", give:"use", pay:"use", oil:"use",
     open:"open", unlock:"open",
     h:"help","?":"help", commands:"help",
+    restore:"load", continue:"load",
     n:"north", s:"south", e:"east", w:"west"
   };
+  const rawVerb = verb;
   if(vsyn[verb]) verb = vsyn[verb];
 
   let rest = words.slice(1).filter(w=>!STOP.has(w));
   let noun = rest[0] || "";
-  // multiword nouns
   const joined = rest.join(" ");
-  if(joined.includes("music")||joined.includes("box")) { if(joined!=="crate") noun = "music"; }
+  if(joined.includes("music")||joined.includes("box")){ if(!joined.includes("crate")) noun = "music"; }
   if(joined.includes("clock")) noun = "clock";
   if(joined.includes("door")) noun = "door";
   if(joined.includes("mat")) noun = "mat";
   if(joined.includes("key")) noun = "key";
+  if(joined.includes("oil")||joined.includes("can")) noun = "oil";
+  if(joined.includes("coin")||joined.includes("silver")) noun = "coin";
+  if(joined.includes("clock")) noun = "clock";
+  if(joined.includes("sarc")||joined.includes("coffin")||joined.includes("tomb")) noun = "sarcophagus";
+  if(joined.includes("gate")||joined.includes("slot")||joined.includes("bars")) noun = "gate";
+  if(joined.includes("crate")) noun = "crate";
+  // special: "oil" used as a verb (oil the clock)
+  if(rawVerb==="oil"){ verb="use"; noun="oil"; }
 
   Sound.blip();
 
   switch(verb){
     case "help":
-      return say("VERBS: LOOK, GET, OPEN, USE, WIND, INVENTORY, GO. Move with ARROW KEYS. Walk into doorways/edges to travel.",11);
+      return say("VERBS: LOOK, GET, OPEN, USE, WIND, INVENTORY, GO, SAVE, LOAD. Move with ARROW KEYS; walk into doorways/edges to travel.",11);
+
+    case "save": {
+      const ok = saveGame();
+      return say(ok?"Game saved. (Your progress is stored in this browser.)":"Could not save here.", ok?10:12);
+    }
+
+    case "load":
+      if(loadGame()){ Sound.door(); return say("Game restored. You are in: "+rooms[game.room].name+".",10); }
+      return say("No saved game found.",12);
 
     case "inventory":
       if(game.inv.length===0) return say("You are carrying nothing but courage (and not much of that).",11);
       return say("You are carrying: " + game.inv.map(id=>ITEMS[id].name).join(", ") + ".",11);
 
     case "look": {
-      if(room.look){
-        const r = room.look(noun);
-        if(r!==null && r!==undefined) return;
-      }
+      if(room.look){ const r = room.look(noun); if(r!==null && r!==undefined) return; }
       return say("You see nothing special about that.",7);
     }
 
     case "get": {
-      // street: under the mat
-      if(game.room==="street"){
-        if(noun==="mat"||joined.includes("under")){
-          if(flag("mat_moved")) return say("You already searched under the mat.",7);
-          setFlag("mat_moved");
-          giveItem("key");
-          Sound.pickup();
-          return say("You lift the WELCOME mat. A tarnished BRASS KEY glints beneath it. Taken!",10);
-        }
-        if(noun==="key"){
-          if(hasItem("key")) return say("You already have the key.",7);
-          return say("You don't see a key out here. Maybe something is hidden nearby...",14);
-        }
+      if(game.room==="street" && (noun==="mat"||joined.includes("under"))){
+        if(flag("mat_moved")) return say("You already searched under the mat.",7);
+        setFlag("mat_moved"); giveItem("key"); Sound.pickup();
+        return say("You lift the WELCOME mat. A tarnished BRASS KEY glints beneath it. Taken!",10);
       }
       if(game.room==="shop"){
         if(noun==="music"){
@@ -551,8 +674,19 @@ function handleCommand(raw){
           setFlag("music_taken"); giveItem("music"); Sound.pickup();
           return say("You take the antique MUSIC BOX. It feels colder than it should.",10);
         }
-        if(noun==="oil"||noun==="can") return say("You don't see an oil can here.",7);
+        if(noun==="oil"){
+          if(flag("oil_taken")) return say("You already have the oil can.",7);
+          setFlag("oil_taken"); giveItem("oil"); Sound.pickup();
+          return say("You pick up the dented OIL CAN. Still half full. Useful!",10);
+        }
       }
+      if(game.room==="catacombs" && noun==="coin"){
+        if(hasItem("coin")) return say("You already have the coin.",7);
+        if(!flag("sarc_looked")) return say("You don't see a coin. Try LOOKing around first.",7);
+        setFlag("coin_taken"); giveItem("coin"); Sound.pickup();
+        return say("You snatch the SILVER COIN off the sarcophagus lid. The skull's grin seems to widen...",10);
+      }
+      if(noun==="key" && !hasItem("key")) return say("You don't see a key here.",7);
       if(!noun) return say("Get what, exactly?",7);
       return say("You can't take that.",7);
     }
@@ -560,19 +694,29 @@ function handleCommand(raw){
     case "open": {
       if(game.room==="street" && (noun==="door"||!noun)){
         if(flag("door_open")) return say("The door is already open. Walk UP to enter.",10);
-        if(hasItem("key")){
-          setFlag("door_open"); Sound.door();
-          return say("The brass key turns with a heavy CLUNK. The door swings open! Walk UP to enter.",10);
-        }
+        if(hasItem("key")){ setFlag("door_open"); Sound.door();
+          return say("The brass key turns with a heavy CLUNK. The door swings open! Walk UP to enter.",10); }
         return say("It's locked. You need a key.",14);
       }
-      if(game.room==="shop" && noun==="clock"){
-        if(flag("clock_open")) return say("It's already open. A passage yawns behind it.",10);
-        if(flag("clock_oiled")){
-          setFlag("clock_open"); Sound.chime();
-          return say("The case swings wide. Behind the clock is a hidden stair spiraling DOWN into darkness...",10);
+      if(game.room==="shop"){
+        if(noun==="clock"){
+          if(flag("clock_open")) return say("It's already open. A stair leads down.",10);
+          if(flag("clock_oiled")){ setFlag("clock_open"); Sound.chime();
+            return say("The case swings wide. Behind the clock, a stone stair spirals DOWN into the dark. Walk UP to descend.",10); }
+          return say("The case is RUSTED shut. You need to loosen it (some OIL, perhaps?).",14);
         }
-        return say("The case is RUSTED shut. You need to loosen it somehow (some OIL, perhaps?).",14);
+        if(noun==="crate"){
+          return die("You pry open the crate. A pair of glowing eyes! Something with too many teeth lunges out and that, sadly, is the end of Hugo.");
+        }
+      }
+      if(game.room==="catacombs"){
+        if(noun==="sarcophagus"){
+          return die("You heave the stone lid aside. A withered MUMMY sits up, eyes blazing, and drags you into the dark. Curiosity, it turns out, also kills the Hugo.");
+        }
+        if(noun==="gate"){
+          if(flag("gate_open")) return say("The gate is already open.",10);
+          return say("The gate won't budge. Maybe that COIN SLOT is the key. Try: USE COIN.",14);
+        }
       }
       if(noun==="music"||noun==="box") return say("Try WIND BOX instead.",7);
       return say("You can't open that.",7);
@@ -580,21 +724,41 @@ function handleCommand(raw){
 
     case "use": {
       if(noun==="key" && game.room==="street") return handleCommand("open door");
-      if(noun==="music"||noun==="box") return handleCommand("wind box");
-      if(noun==="oil" && game.room==="shop"){
-        return say("You don't have any oil. (This is a vertical slice — the oil can comes later!)",14);
+      if((noun==="music"||noun==="box")) return handleCommand("wind box");
+      if(noun==="oil"){
+        if(!hasItem("oil")) return say("You don't have any oil.",7);
+        if(game.room==="shop"){
+          if(flag("clock_oiled")) return say("The clock is already well oiled.",7);
+          setFlag("clock_oiled"); Sound.chime();
+          return say("You squirt oil into the clock's rusted hinges. They loosen with a groan. Now try: OPEN CLOCK.",10);
+        }
+        return say("Nothing here needs oiling.",7);
+      }
+      if(noun==="coin"){
+        if(!hasItem("coin")) return say("You don't have a coin.",7);
+        if(game.room==="catacombs"){
+          if(flag("gate_open")) return say("The gate is already open.",7);
+          takeItem("coin"); setFlag("gate_open"); Sound.chime();
+          return say("You slide the silver coin into the slot. Gears grind, and the iron GATE shudders open. Walk EAST.",10);
+        }
+        return say("There's nowhere to use the coin here.",7);
       }
       return say("Nothing happens.",7);
     }
 
     case "wind": {
-      if((noun==="music"||noun==="box"||noun==="crank") ){
+      if(noun==="music"||noun==="box"||noun==="crank"){
         if(!hasItem("music")) return say("You don't have the music box.",7);
-        Sound.chime();
-        setFlag("music_wound");
-        return say("The music box tinkles a sad, familiar lullaby — Penelope used to hum it. The clock's PENDULUM shivers...",13);
+        if(game.room==="crypt" && !flag("freed")){
+          setFlag("freed"); Sound.lullaby();
+          setTimeout(()=>{ game.scene="win"; }, 2600);
+          return say("You wind the music box. Penelope's lullaby drifts through the crypt. The glass clouds, then shatters - she stirs, and wakes!",14);
+        }
+        if(flag("freed")) return say("The music box plays softly. Penelope hums along.",13);
+        Sound.lullaby(); setFlag("music_wound");
+        return say("The music box tinkles a sad, familiar lullaby - Penelope used to hum it. Somewhere, the tune feels... important.",13);
       }
-      if(noun==="clock") return say("You can't wind that creepy old clock by hand.",7);
+      if(noun==="clock") return say("You can't wind that cursed old clock by hand.",7);
       return say("Wind what?",7);
     }
 
@@ -602,96 +766,107 @@ function handleCommand(raw){
     case "north": case "south": case "east": case "west": {
       let dir = (verb==="go")? noun : verb;
       if(game.room==="street"){
-        if(dir==="up"||dir==="north"||dir==="in"||dir==="inside"||dir==="shop"||noun==="door"){
+        if(["up","north","in","inside","shop","door"].includes(dir)){
           if(flag("door_open")){ travel("shop"); return; }
           return say("The door is closed. Try: OPEN DOOR.",14);
         }
       }
       if(game.room==="shop"){
-        if(dir==="west"||dir==="left"||dir==="out"||dir==="exit"||dir==="street"){ travel("street"); return; }
-        if(dir==="down"||noun==="stair"||noun==="passage"){
-          if(flag("clock_open")) return winSlice();
+        if(["west","left","out","exit","street"].includes(dir)){ travel("street"); return; }
+        if(["down","north","up"].includes(dir) || noun==="stair" || noun==="clock"){
+          if(flag("clock_open")){ travel("catacombs"); return; }
           return say("There's no way down... yet.",14);
         }
+      }
+      if(game.room==="catacombs"){
+        if(["up","west","left","stair","stairs","shop"].includes(dir)){ travel("shop"); return; }
+        if(["east","right","gate","crypt"].includes(dir)){
+          if(flag("gate_open")){ travel("crypt"); return; }
+          return say("The gate bars the way east.",14);
+        }
+      }
+      if(game.room==="crypt"){
+        if(["west","left","out","gate","catacombs"].includes(dir)){ travel("catacombs"); return; }
       }
       return say("You can't go that way.",7);
     }
 
     default:
-      return say("I don't understand '"+raw.trim()+"'. Type HELP for verbs.",12), Sound.error();
+      Sound.error();
+      return say("I don't understand '"+raw.trim()+"'. Type HELP for verbs.",12);
   }
 }
 
 /* =========================================================
-   TRAVEL between rooms
+   TRAVEL
    ========================================================= */
 function travel(id){
-  const r = rooms[id];
-  if(!r) return;
-  game.room = id;
-  game.px = r.enterX; game.py = r.enterY;
-  game.walking = false;
+  const r = rooms[id]; if(!r) return;
+  game.room = id; game.px = r.enterX; game.py = r.enterY; game.walking=false;
   Sound.door();
   say("You enter: "+r.name+".",11);
-}
-
-function winSlice(){
-  game.scene = "slice_end";
-  Sound.sting();
+  saveGame(); // autosave on room change
 }
 
 /* =========================================================
    INPUT
    ========================================================= */
 const keys = {};
+let crtOn = true;
+function setCRT(on){ crtOn = on; crtEl.classList.toggle("off", !on); }
+
 window.addEventListener("keydown", (e)=>{
-  // Title / end screens: Enter to advance
+  // global toggles
+  if((e.key==="t"||e.key==="T") && document.activeElement!==parserInput){ setCRT(!crtOn); return; }
+  if((e.key==="m"||e.key==="M") && document.activeElement!==parserInput){ Sound.toggleMute(); return; }
+
   if(game.scene!=="play"){
     if(e.key==="Enter"){
-      if(game.scene==="title"){ game.scene="play"; travel("street"); Sound.beep(); }
-      else if(game.scene==="slice_end"){ resetGame(); }
+      if(game.scene==="title"){ startNew(); }
+      else if(game.scene==="dead"){ respawn(); }
+      else if(game.scene==="win"){ resetGame(); }
     }
-    if(e.key==="m"||e.key==="M"){ Sound.toggleMute(); }
+    if((e.key==="c"||e.key==="C") && game.scene==="title" && hasSave()){
+      if(loadGame()){ Sound.beep(); say("Welcome back. You are in: "+rooms[game.room].name+".",11); }
+    }
     return;
   }
-  // mute toggle
-  if((e.key==="m"||e.key==="M") && document.activeElement!==parserInput){
-    Sound.toggleMute(); return;
-  }
-  // arrow movement
-  if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)){
-    keys[e.key] = true; e.preventDefault();
-  }
+  if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)){ keys[e.key]=true; e.preventDefault(); }
 });
 window.addEventListener("keyup",(e)=>{ keys[e.key]=false; });
 
-// Parser input: a hidden text field captures typed commands.
 parserInput.addEventListener("keydown",(e)=>{ e.stopPropagation(); });
 parserInput.addEventListener("keyup",(e)=>{
   e.stopPropagation();
   if(e.key==="Enter"){
-    const v = parserInput.value;
-    parserInput.value="";
+    const v = parserInput.value; parserInput.value="";
     if(game.scene==="play" && v.trim()) handleCommand(v);
   }
 });
-// Focus the parser whenever the user types a letter
 window.addEventListener("keydown",(e)=>{
   if(game.scene!=="play") return;
   if(e.key.length===1 && /[a-zA-Z0-9 '?]/.test(e.key) && document.activeElement!==parserInput){
+    if((e.key==="m"||e.key==="M"||e.key==="t"||e.key==="T")) return; // reserved toggles
     parserInput.focus();
   }
 });
-// click canvas to focus too
 canvas.addEventListener("mousedown",()=>{ if(game.scene==="play") parserInput.focus(); ensureAudioOnGesture(); });
-window.addEventListener("keydown", ensureAudioOnGesture, {once:false});
+window.addEventListener("keydown", ensureAudioOnGesture);
 let _titlePlayed=false;
 function ensureAudioOnGesture(){
   if(game.scene==="title" && !_titlePlayed){ _titlePlayed=true; Sound.title(); }
 }
 
+function startNew(){
+  try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+  game.inv=[]; game.flags={};
+  game.scene="play"; travel("street");
+  say("Welcome to YE OLDE ANTIQUES. Your beloved Penelope is somewhere inside...",14);
+  Sound.beep();
+}
+
 /* =========================================================
-   UPDATE & RENDER LOOP
+   UPDATE & RENDER
    ========================================================= */
 const SPEED = 1.4;
 let stepTimer = 0;
@@ -699,8 +874,7 @@ function update(){
   if(game.scene!=="play") return;
   const room = rooms[game.room];
   const wb = room.walk;
-  let moving = false;
-  let dx=0, dy=0;
+  let dx=0, dy=0, moving=false;
   if(keys.ArrowLeft){ dx-=SPEED; game.facing=-1; }
   if(keys.ArrowRight){ dx+=SPEED; game.facing=1; }
   if(keys.ArrowUp){ dy-=SPEED; }
@@ -708,7 +882,6 @@ function update(){
   if(dx||dy){
     moving=true;
     game.px += dx; game.py += dy;
-    // clamp feet to walkbox (py is top of sprite; sprite 19 tall)
     const footY = game.py + 19;
     if(game.px < wb.x) game.px = wb.x;
     if(game.px > wb.x+wb.w-11) game.px = wb.x+wb.w-11;
@@ -717,46 +890,39 @@ function update(){
 
     // EDGE-TRIGGERED TRAVEL
     if(game.room==="street"){
-      // walk up to the door region opens transition
-      if(flag("door_open") && game.px>146 && game.px<188 && game.py+19 < 150){
-        // need to be near the door horizontally and pushing up
-        if(keys.ArrowUp){ travel("shop"); }
-      }
-    }
-    if(game.room==="shop"){
-      if(game.px <= wb.x+2){ travel("street"); }
-      if(flag("clock_open") && game.px>150 && game.px<196 && keys.ArrowUp){ winSlice(); }
+      if(flag("door_open") && game.px>146 && game.px<188 && keys.ArrowUp){ travel("shop"); }
+    } else if(game.room==="shop"){
+      if(game.px <= wb.x+1){ travel("street"); }
+      if(flag("clock_open") && game.px>150 && game.px<196 && keys.ArrowUp){ travel("catacombs"); }
+    } else if(game.room==="catacombs"){
+      if(game.px <= wb.x+1){ travel("shop"); }
+      if(flag("gate_open") && game.px >= wb.x+wb.w-12){ travel("crypt"); }
+    } else if(game.room==="crypt"){
+      if(game.px <= wb.x+1){ travel("catacombs"); }
     }
   }
   game.walking = moving;
   if(moving){
     stepTimer++;
-    if(stepTimer% 8===0){ game.walkPhase ^=1; Sound.footstep(); }
-  } else { game.walkPhase=0; }
-
+    if(stepTimer%8===0){ game.walkPhase ^=1; Sound.footstep(); }
+  } else game.walkPhase=0;
   if(game.msgTimer>0) game.msgTimer--;
 }
 
 function drawHUD(){
-  // bottom message/parser bar
   rect(0,160,W,40, 0);
   rect(0,160,W,1, 8);
-  // message (wrapped, 2-3 lines)
   const lines = wrap(game.msg || "", 51).slice(0,3);
   let yy=164;
   for(const ln of lines){ text(ln, 6, yy, (game.msgTimer>0?game.textColor:7)); yy+=8; }
-  // prompt line
   text("> "+(parserInput.value.toUpperCase()), 6, 190, 10);
-  // blinking cursor
-  if(((performance.now()/400)|0)%2===0){
+  if(((performance.now()/400)|0)%2===0)
     rect(6 + textWidth("> "+parserInput.value), 190, 5, 7, 10);
-  }
 }
 
 function renderPlay(){
   const room = rooms[game.room];
   room.draw();
-  // draw Hugo
   const frame = (game.walking && game.walkPhase) ? HUGO_B : HUGO_A;
   drawSprite(frame, game.px|0, game.py|0, game.facing<0);
   drawHUD();
@@ -764,59 +930,66 @@ function renderPlay(){
 
 function renderTitle(){
   clear(0);
-  // border
   rect(0,0,W,8,4); rect(0,H-8,W,8,4); rect(0,0,8,H,4); rect(W-8,0,8,H,4);
   dither(0,0,W,8,4,12); dither(0,H-8,W,8,12,4);
-  // spooky house silhouette
-  rect(110,70,100,60,8);
-  rect(120,50,80,24,8);
-  // roof
+  rect(110,70,100,60,8); rect(120,50,80,24,8);
   for(let i=0;i<40;i++){ rect(130-i,72-i,2,2,0); rect(190+i,72-i,2,2,0); }
-  rect(150,60,20,70,0);  // door col
-  rect(124,80,12,12,14); rect(184,80,12,12,14); // lit windows
-  rect(150,100,20,30,6); // door
-  // a single floating antique: a clock
+  rect(150,60,20,70,0);
+  rect(124,80,12,12,14); rect(184,80,12,12,14);
+  rect(150,100,20,30,6);
   rect(40,90,26,60,6); rect(43,93,20,20,15); rect(48,140,10,8,14);
   text("TICK", 36,76, 7);
-  // title text
   textCentered("HUGO IV", 24, 14);
   textCentered("THE ANTIQUE SHOP", 36, 12);
   textCentered("OF HORRORS", 46, 12);
-  // tagline
-  textCentered("AN UNOFFICIAL EGA ADVENTURE", 158, 7);
-  // prompt blink
-  if(((performance.now()/500)|0)%2===0){
-    textCentered("PRESS ENTER TO BEGIN", 176, 15);
-  }
-  textCentered("(M = TOGGLE SOUND)", 186, 8);
+  textCentered("AN UNOFFICIAL EGA ADVENTURE", 150, 7);
+  if(((performance.now()/500)|0)%2===0) textCentered("PRESS ENTER TO BEGIN", 168, 15);
+  if(hasSave()) textCentered("C = CONTINUE SAVED GAME", 180, 11);
+  textCentered("M=SOUND   T=CRT", 190, 8);
 }
 
-function renderSliceEnd(){
+function renderDead(){
   clear(0);
-  rect(0,0,W,8,5); rect(0,H-8,W,8,5);
-  textCentered("THE HIDDEN STAIR", 30, 14);
-  const body = "Behind the cursed grandfather clock, a stone stair spirals down into the dark. Penelope's lullaby still echoes from the music box in your pocket. Somewhere below, something is waiting...";
-  const lines = wrap(body, 46);
-  let y=58;
-  for(const ln of lines){ textCentered(ln, y, 11); y+=10; }
-  textCentered("END OF DEMO SLICE", y+14, 12);
-  if(((performance.now()/500)|0)%2===0)
-    textCentered("PRESS ENTER TO PLAY AGAIN", y+34, 15);
+  // blood-drip border
+  rect(0,0,W,6,4); for(let x=4;x<W;x+=16) rect(x,6,3,4+(x%5),4);
+  textCentered("YOU HAVE DIED", 36, 12);
+  const lines = wrap(game.deathCause||"Hugo has met an untimely end.", 44);
+  let y=64; for(const ln of lines){ textCentered(ln,y,7); y+=10; }
+  textCentered("- but death is rarely permanent here -", y+12, 8);
+  if(((performance.now()/500)|0)%2===0) textCentered("PRESS ENTER TO CONTINUE", y+32, 15);
 }
 
+function renderWin(){
+  clear(0);
+  rect(0,0,W,8,2); rect(0,H-8,W,8,2);
+  dither(0,0,W,8,2,10); dither(0,H-8,W,8,10,2);
+  // Hugo + Penelope together
+  drawSprite(HUGO_A, 130, 60, true);
+  drawSprite(PEN, 160, 60, false);
+  // little hearts
+  for(const hx of [150,156]) { rect(hx,52,4,3,12); rect(hx+1,55,2,2,12); }
+  textCentered("THE CURSE IS BROKEN", 30, 14);
+  const body = "Hugo carries Penelope up from the dark, the cursed clock forever silent behind them. The antiques can keep their secrets. Home, and tea, await.";
+  const lines = wrap(body, 44); let y=92;
+  for(const ln of lines){ textCentered(ln,y,11); y+=10; }
+  textCentered("THE END", y+12, 14);
+  if(((performance.now()/500)|0)%2===0) textCentered("PRESS ENTER TO PLAY AGAIN", y+30, 15);
+}
+
+let _winPlayed=false;
 function resetGame(){
-  game.scene="title";
-  game.room="street";
+  game.scene="title"; game.room="street";
   game.inv=[]; game.flags={};
   game.px=150; game.py=150; game.facing=1;
   game.msg=""; game.msgTimer=0;
-  _titlePlayed=false;
+  _titlePlayed=false; _winPlayed=false;
 }
 
 function frame(){
   update();
   if(game.scene==="title") renderTitle();
-  else if(game.scene==="slice_end") renderSliceEnd();
+  else if(game.scene==="dead") renderDead();
+  else if(game.scene==="win"){ if(!_winPlayed){ _winPlayed=true; Sound.fanfare(); } renderWin(); }
   else renderPlay();
   requestAnimationFrame(frame);
 }
