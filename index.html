@@ -412,7 +412,8 @@ const game = {
   walking: false, walkPhase: 0,
   inv: [], flags: {},
   msg: "", msgTimer: 0, textColor: 15,
-  deathCause: ""
+  deathCause: "",
+  score: 0, deaths: 0, awarded: {}
 };
 function flag(k){ return !!game.flags[k]; }
 function setFlag(k,v){ game.flags[k] = (v===undefined?true:v); }
@@ -426,6 +427,31 @@ function say(s, color){
 }
 
 /* =========================================================
+   HAPTICS (mobile rumble; no-op on desktop / unsupported)
+   ========================================================= */
+const Haptic = {
+  buzz(pattern){
+    try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){}
+  }
+};
+
+/* =========================================================
+   SCORE — Sierra-style points for solving the adventure
+   ========================================================= */
+const SCORES = {
+  key:10, shop:5, oil:10, music:10, lantern:10, oil_clock:10,
+  open_clock:10, descend:5, coin:15, gate:15, freed:20
+};
+const MAX_SCORE = Object.values(SCORES).reduce((a,b)=>a+b,0);
+function award(name){
+  if(game.awarded[name] || !(name in SCORES)) return;
+  game.awarded[name] = true;
+  game.score += SCORES[name];
+  Sound.blip();
+  Haptic.buzz(12);
+}
+
+/* =========================================================
    SAVE / RESTORE (localStorage)
    ========================================================= */
 const SAVE_KEY = "hugo4_save_v1";
@@ -433,7 +459,8 @@ function saveGame(){
   try{
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       room:game.room, px:game.px, py:game.py, facing:game.facing,
-      inv:game.inv, flags:game.flags
+      inv:game.inv, flags:game.flags,
+      score:game.score, deaths:game.deaths, awarded:game.awarded
     }));
     return true;
   }catch(e){ return false; }
@@ -445,6 +472,7 @@ function loadGame(){
     const d = JSON.parse(s);
     game.room=d.room; game.px=d.px; game.py=d.py; game.facing=d.facing||1;
     game.inv=d.inv||[]; game.flags=d.flags||{};
+    game.score=d.score||0; game.deaths=d.deaths||0; game.awarded=d.awarded||{};
     game.scene="play"; game.walking=false;
     return true;
   }catch(e){ return false; }
@@ -455,8 +483,10 @@ function loadGame(){
    ========================================================= */
 function die(cause){
   game.deathCause = cause;
+  game.deaths++;
   game.scene = "dead";
   Sound.death();
+  Haptic.buzz([90,50,140]);
 }
 function respawn(){
   // Forgiving: keep inventory & flags, return to a safe spot in the room.
@@ -470,10 +500,11 @@ function respawn(){
    ITEMS
    ========================================================= */
 const ITEMS = {
-  key:   { name:"a brass key" },
-  oil:   { name:"an oil can" },
-  coin:  { name:"a silver coin" },
-  music: { name:"an antique music box" }
+  key:     { name:"a brass key" },
+  oil:     { name:"an oil can" },
+  coin:    { name:"a silver coin" },
+  music:   { name:"an antique music box" },
+  lantern: { name:"a lit brass lantern" }
 };
 
 /* =========================================================
@@ -538,7 +569,11 @@ const rooms = {
       rect(0,160,W,2,0);
       rect(8,96,40,64, 0); rect(12,100,32,56, 1);
       text("EXIT", 14,120, 14);
-      rect(210,70,90,10, 0); rect(210,80,90,2,8);
+      // staircase UP to the parlor (right side)
+      rect(286,40,34,120, 0);
+      for(let i=0;i<7;i++) rect(290,150-i*16,26,6,8);
+      text("UP", 296, 120, 11);
+      rect(210,70,72,10, 0); rect(210,80,72,2,8);
       if(!flag("music_taken")){
         rect(238,52,28,18, 5); rect(238,52,28,4,13);
         rect(244,46,16,6,14); rect(250,40,4,8,7);
@@ -562,7 +597,8 @@ const rooms = {
       text("DUSTY ANTIQUES EVERYWHERE", 70, 8, 14);
     },
     look(noun){
-      if(!noun||noun==="around"||noun==="shop"||noun==="room") return say("A cramped shop crammed with relics. A GRANDFATHER CLOCK ticks in the gloom. A SHELF holds a small box. An OIL CAN sits by a CRATE. EXIT is left.",14);
+      if(!noun||noun==="around"||noun==="shop"||noun==="room") return say("A cramped shop crammed with relics. A GRANDFATHER CLOCK ticks in the gloom. A SHELF holds a small box. An OIL CAN sits by a CRATE. STAIRS lead UP; EXIT is left.",14);
+      if(noun==="stairs"||noun==="stair"||noun==="up"||noun==="upstairs") return say("A rickety staircase climbs UP to a parlor above. Walk RIGHT to take it.",14);
       if(noun==="clock"||noun==="grandfather"){
         if(flag("clock_open")) return say("The clock's case hangs open, revealing a stair spiraling DOWN into darkness.",10);
         if(flag("clock_oiled")) return say("The clock's hinges glisten with oil now. Try: OPEN CLOCK.",14);
@@ -589,11 +625,73 @@ const rooms = {
     }
   },
 
+  /* ---------------- UPSTAIRS PARLOR ---------------- */
+  upstairs: {
+    name:"The Upstairs Parlor",
+    walk:{x:8,y:150,w:304,h:38}, enterX:280, enterY:158,
+    draw(){
+      // wallpapered parlor
+      rect(0,0,W,160, 5); dither(0,0,W,160, 5,1);
+      rect(0,160,W,40, 6);
+      for(let x=0;x<W;x+=24) rect(x,160,1,40,0);
+      rect(0,160,W,2,0);
+      // stairs DOWN (right)
+      rect(286,40,34,120, 0);
+      for(let i=0;i<7;i++) rect(290,52+i*16,26,6,8);
+      text("DOWN", 290, 120, 11);
+      // tall window with moonlight
+      rect(40,30,52,70, 0); dither(44,34,44,62, 1,9);
+      line(66,34,66,96,0); line(44,64,88,64,0);
+      // creepy portrait on the wall
+      rect(150,36,40,46, 6); rect(154,40,32,38, 8);
+      rect(160,48,8,8,15); rect(172,48,8,8,15); // eyes
+      rect(162,50,4,4,0); rect(174,50,4,4,0);
+      rect(160,66,20,4,4); // mouth
+      // side table holding the lantern
+      rect(210,120,56,8,6); rect(214,128,6,30,6); rect(256,128,6,30,6);
+      if(!flag("lantern_taken")){
+        // brass lantern with a warm glow
+        const g=(Math.sin(performance.now()/180)>0)?14:12;
+        rect(230,96,16,22,6); rect(232,98,12,18,g);
+        rect(234,90,8,6,6); rect(236,86,4,4,7); // handle
+      }
+      line(0,0,28,28,7); line(W,0,W-28,28,7); // cobwebs
+      text("THE PARLOR ABOVE", 96, 8, 13);
+    },
+    look(noun){
+      if(!noun||noun==="around"||noun==="parlor"||noun==="room") return say("A musty parlor. Moonlight spills through a tall WINDOW. A grim PORTRAIT watches from the wall. A LANTERN sits on a side TABLE. STAIRS lead DOWN.",13);
+      if(noun==="lantern"||noun==="lamp"||noun==="light"){
+        if(hasItem("lantern")) return say("Your brass lantern, burning steady and warm. It'll light the darkest tomb.",14);
+        if(flag("lantern_taken")) return say("You already took the lantern.",7);
+        return say("A brass LANTERN, miraculously still lit. Just the thing for a dark cellar. Try: GET LANTERN.",14);
+      }
+      if(noun==="portrait"||noun==="painting"||noun==="picture"){
+        return say("A portrait of a stern antiquarian. Its eyes seem to follow you. The little brass plaque reads 'HAMMERSTEIN'.",13);
+      }
+      if(noun==="window") return say("Moonlight and fog. You can see the cobblestone street far below.",14);
+      if(noun==="table") return say(flag("lantern_taken")?"A small side table, now bare.":"A side table holding a lit LANTERN.",14);
+      if(noun==="stairs"||noun==="stair"||noun==="down") return say("The stairs lead back DOWN to the shop. Walk RIGHT.",14);
+      return null;
+    }
+  },
+
   /* ---------------- CATACOMBS ---------------- */
   catacombs: {
     name:"The Catacombs",
     walk:{x:8,y:150,w:304,h:38}, enterX:30, enterY:158,
     draw(){
+      // Without a light source, the catacombs are pitch black.
+      if(!hasItem("lantern")){
+        rect(0,0,W,200,0);
+        rect(6,96,34,64,8);                       // dim stairwell glow up-left
+        for(let i=0;i<6;i++) rect(10,150-i*8,28,4,7);
+        text("UP", 14,118, 11);
+        rect(0,160,W,2,8);
+        textCentered("IT IS PITCH BLACK DOWN HERE", 74, 8);
+        textCentered("YOU NEED A LIGHT TO SEE", 90, 7);
+        textCentered("- BETTER GO BACK UP -", 106, 8);
+        return;
+      }
       rect(0,0,W,160,0); dither(0,0,W,160,8,0);
       rect(0,160,W,40,8);
       for(let x=0;x<W;x+=32) rect(x,160,1,40,0);
@@ -629,7 +727,8 @@ const rooms = {
       text("COLD STONE AND OLD BONES", 70, 8, 7);
     },
     look(noun){
-      if(!noun||noun==="around"||noun==="catacombs"||noun==="room") return say("Damp catacombs beneath the shop. Torches gutter. A stone SARCOPHAGUS squats here; a barred GATE blocks the way EAST. Stairs lead UP.",7);
+      if(!hasItem("lantern")) return say("It's pitch black - you can't make anything out. You need a LIGHT. (Wasn't there a lantern in the parlor upstairs?)",7);
+      if(!noun||noun==="around"||noun==="catacombs"||noun==="room") return say("Damp catacombs beneath the shop. Your lantern reveals a stone SARCOPHAGUS and a barred GATE to the EAST. Stairs lead UP.",7);
       if(noun==="sarcophagus"||noun==="sarc"||noun==="coffin"||noun==="tomb"){
         setFlag("sarc_looked");
         if(flag("coin_taken")) return say("The heavy stone sarcophagus. Its carved skull seems to watch you. Best leave the lid shut.",14);
@@ -738,6 +837,7 @@ function handleCommand(raw){
   if(joined.includes("sarc")||joined.includes("coffin")||joined.includes("tomb")) noun = "sarcophagus";
   if(joined.includes("gate")||joined.includes("slot")||joined.includes("bars")) noun = "gate";
   if(joined.includes("crate")) noun = "crate";
+  if(joined.includes("lantern")) noun = "lantern";
   // special: "oil" used as a verb (oil the clock)
   if(rawVerb==="oil"){ verb="use"; noun="oil"; }
 
@@ -768,25 +868,31 @@ function handleCommand(raw){
     case "get": {
       if(game.room==="street" && (noun==="mat"||joined.includes("under"))){
         if(flag("mat_moved")) return say("You already searched under the mat.",7);
-        setFlag("mat_moved"); giveItem("key"); Sound.pickup();
+        setFlag("mat_moved"); giveItem("key"); Sound.pickup(); Haptic.buzz(20); award("key");
         return say("You lift the WELCOME mat. A tarnished BRASS KEY glints beneath it. Taken!",10);
       }
       if(game.room==="shop"){
         if(noun==="music"){
           if(flag("music_taken")) return say("You already took the music box.",7);
-          setFlag("music_taken"); giveItem("music"); Sound.pickup();
+          setFlag("music_taken"); giveItem("music"); Sound.pickup(); Haptic.buzz(20); award("music");
           return say("You take the antique MUSIC BOX. It feels colder than it should.",10);
         }
         if(noun==="oil"){
           if(flag("oil_taken")) return say("You already have the oil can.",7);
-          setFlag("oil_taken"); giveItem("oil"); Sound.pickup();
+          setFlag("oil_taken"); giveItem("oil"); Sound.pickup(); Haptic.buzz(20); award("oil");
           return say("You pick up the dented OIL CAN. Still half full. Useful!",10);
         }
       }
+      if(game.room==="upstairs" && noun==="lantern"){
+        if(flag("lantern_taken")) return say("You already have the lantern.",7);
+        setFlag("lantern_taken"); giveItem("lantern"); Sound.pickup(); Haptic.buzz(20); award("lantern");
+        return say("You take the lit brass LANTERN. Its warm glow pushes back the shadows.",10);
+      }
       if(game.room==="catacombs" && noun==="coin"){
+        if(!hasItem("lantern")) return say("It's too dark to find anything. You need a LIGHT.",7);
         if(hasItem("coin")) return say("You already have the coin.",7);
         if(!flag("sarc_looked")) return say("You don't see a coin. Try LOOKing around first.",7);
-        setFlag("coin_taken"); giveItem("coin"); Sound.pickup();
+        setFlag("coin_taken"); giveItem("coin"); Sound.pickup(); Haptic.buzz(20); award("coin");
         return say("You snatch the SILVER COIN off the sarcophagus lid. The skull's grin seems to widen...",10);
       }
       if(noun==="key" && !hasItem("key")) return say("You don't see a key here.",7);
@@ -804,7 +910,7 @@ function handleCommand(raw){
       if(game.room==="shop"){
         if(noun==="clock"){
           if(flag("clock_open")) return say("It's already open. A stair leads down.",10);
-          if(flag("clock_oiled")){ setFlag("clock_open"); Sound.chime();
+          if(flag("clock_oiled")){ setFlag("clock_open"); Sound.chime(); award("open_clock");
             return say("The case swings wide. Behind the clock, a stone stair spirals DOWN into the dark. Walk UP to descend.",10); }
           return say("The case is RUSTED shut. You need to loosen it (some OIL, perhaps?).",14);
         }
@@ -813,6 +919,7 @@ function handleCommand(raw){
         }
       }
       if(game.room==="catacombs"){
+        if(!hasItem("lantern")) return say("It's too dark to see what you're doing down here.",7);
         if(noun==="sarcophagus"){
           return die("You heave the stone lid aside. A withered MUMMY sits up, eyes blazing, and drags you into the dark. Curiosity, it turns out, also kills the Hugo.");
         }
@@ -832,7 +939,7 @@ function handleCommand(raw){
         if(!hasItem("oil")) return say("You don't have any oil.",7);
         if(game.room==="shop"){
           if(flag("clock_oiled")) return say("The clock is already well oiled.",7);
-          setFlag("clock_oiled"); Sound.chime();
+          setFlag("clock_oiled"); Sound.chime(); award("oil_clock");
           return say("You squirt oil into the clock's rusted hinges. They loosen with a groan. Now try: OPEN CLOCK.",10);
         }
         return say("Nothing here needs oiling.",7);
@@ -840,8 +947,9 @@ function handleCommand(raw){
       if(noun==="coin"){
         if(!hasItem("coin")) return say("You don't have a coin.",7);
         if(game.room==="catacombs"){
+          if(!hasItem("lantern")) return say("It's too dark to find the slot. You need a LIGHT.",7);
           if(flag("gate_open")) return say("The gate is already open.",7);
-          takeItem("coin"); setFlag("gate_open"); Sound.chime();
+          takeItem("coin"); setFlag("gate_open"); Sound.chime(); award("gate");
           return say("You slide the silver coin into the slot. Gears grind, and the iron GATE shudders open. Walk EAST.",10);
         }
         return say("There's nowhere to use the coin here.",7);
@@ -853,7 +961,7 @@ function handleCommand(raw){
       if(noun==="music"||noun==="box"||noun==="crank"){
         if(!hasItem("music")) return say("You don't have the music box.",7);
         if(game.room==="crypt" && !flag("freed")){
-          setFlag("freed"); Sound.lullaby();
+          setFlag("freed"); Sound.lullaby(); award("freed");
           setTimeout(()=>{ game.scene="win"; }, 2600);
           return say("You wind the music box. Penelope's lullaby drifts through the crypt. The glass clouds, then shatters - she stirs, and wakes!",14);
         }
@@ -876,10 +984,14 @@ function handleCommand(raw){
       }
       if(game.room==="shop"){
         if(["west","left","out","exit","street"].includes(dir)){ travel("street"); return; }
-        if(["down","north","up"].includes(dir) || noun==="stair" || noun==="clock"){
+        if(["right","up","upstairs","stairs","stair","parlor"].includes(dir)){ travel("upstairs"); return; }
+        if(["down","descend","north"].includes(dir) || noun==="clock"){
           if(flag("clock_open")){ travel("catacombs"); return; }
           return say("There's no way down... yet.",14);
         }
+      }
+      if(game.room==="upstairs"){
+        if(["right","down","downstairs","out","stairs","stair","shop"].includes(dir)){ travel("shop"); return; }
       }
       if(game.room==="catacombs"){
         if(["up","west","left","stair","stairs","shop"].includes(dir)){ travel("shop"); return; }
@@ -906,7 +1018,9 @@ function handleCommand(raw){
 function travel(id){
   const r = rooms[id]; if(!r) return;
   game.room = id; game.px = r.enterX; game.py = r.enterY; game.walking=false;
-  Sound.door();
+  Sound.door(); Haptic.buzz(12);
+  if(id==="shop") award("shop");
+  if(id==="catacombs") award("descend");
   say("You enter: "+r.name+".",11);
   saveGame(); // autosave on room change
 }
@@ -1052,6 +1166,7 @@ elStage.addEventListener("pointerdown",(e)=>{
 function startNew(){
   try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
   game.inv=[]; game.flags={};
+  game.score=0; game.deaths=0; game.awarded={};
   game.scene="play"; travel("street");
   say("Welcome to YE OLDE ANTIQUES. Your beloved Penelope is somewhere inside...",14);
   Sound.beep();
@@ -1085,7 +1200,10 @@ function update(){
       if(flag("door_open") && game.px>146 && game.px<188 && keys.ArrowUp){ travel("shop"); }
     } else if(game.room==="shop"){
       if(game.px <= wb.x+1){ travel("street"); }
+      if(game.px >= wb.x+wb.w-12){ travel("upstairs"); }
       if(flag("clock_open") && game.px>150 && game.px<196 && keys.ArrowUp){ travel("catacombs"); }
+    } else if(game.room==="upstairs"){
+      if(game.px >= wb.x+wb.w-12){ travel("shop"); }
     } else if(game.room==="catacombs"){
       if(game.px <= wb.x+1){ travel("shop"); }
       if(flag("gate_open") && game.px >= wb.x+wb.w-12){ travel("crypt"); }
@@ -1112,11 +1230,19 @@ function drawHUD(){
     rect(6 + textWidth("> "+parserInput.value), 190, 5, 7, 10);
 }
 
+function pad3(n){ n=""+n; return "000".slice(n.length)+n; }
+function drawTopBar(){
+  rect(0,0,W,8,0);                 // Sierra-style menu/score bar
+  text("SCORE "+pad3(game.score)+"/"+MAX_SCORE, 2, 1, 14);
+  const dt = "DEATHS "+game.deaths;
+  text(dt, W-2-textWidth(dt), 1, 12);
+}
 function renderPlay(){
   const room = rooms[game.room];
   room.draw();
   const frame = (game.walking && game.walkPhase) ? HUGO_B : HUGO_A;
   drawSprite(frame, game.px|0, game.py|0, game.facing<0);
+  drawTopBar();
   drawHUD();
 }
 
@@ -1164,11 +1290,13 @@ function renderWin(){
   for(const hx of [150,156]) { rect(hx,52,4,3,12); rect(hx+1,55,2,2,12); }
   textCentered("THE CURSE IS BROKEN", 30, 14);
   const body = "Hugo carries Penelope up from the dark, the cursed clock forever silent behind them. The antiques can keep their secrets. Home, and tea, await.";
-  const lines = wrap(body, 44); let y=92;
+  const lines = wrap(body, 44); let y=86;
   for(const ln of lines){ textCentered(ln,y,11); y+=10; }
-  textCentered("THE END", y+12, 14);
+  const perfect = (game.score>=MAX_SCORE && game.deaths===0);
+  textCentered("FINAL SCORE "+game.score+"/"+MAX_SCORE+"   DEATHS "+game.deaths, y+8, 14);
+  textCentered(perfect ? "A FLAWLESS RESCUE!" : "THE END", y+20, perfect?10:14);
   if(((performance.now()/500)|0)%2===0)
-    textCentered(TOUCH ? "TAP PLAY AGAIN BELOW" : "PRESS ENTER TO PLAY AGAIN", y+30, 15);
+    textCentered(TOUCH ? "TAP PLAY AGAIN BELOW" : "PRESS ENTER TO PLAY AGAIN", y+36, 15);
 }
 
 let _winPlayed=false;
@@ -1177,6 +1305,7 @@ function resetGame(){
   game.inv=[]; game.flags={};
   game.px=150; game.py=150; game.facing=1;
   game.msg=""; game.msgTimer=0;
+  game.score=0; game.deaths=0; game.awarded={};
   _titlePlayed=false; _winPlayed=false;
 }
 
