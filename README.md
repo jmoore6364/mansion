@@ -36,11 +36,17 @@ xdg-open index.html    # Linux
 
 | Input | Action |
 |-------|--------|
-| **Arrow keys** | Walk Hugo around |
+| **Click / tap an object** | Interact with it (the smart default action) |
+| **Click / tap the floor** | Walk there (point-and-click) |
+| **Arrow keys / D-pad** | Walk Hugo around |
 | **Type + Enter** | Issue a parser command |
+| **I / ITEMS button** | Open the inventory panel (tap an item to examine) |
 | **M** | Toggle sound |
 | **T** | Toggle the CRT scanline filter |
 | **C** (title) | Continue a saved game |
+
+You can play the whole game **without typing** — tap objects and the floor — or
+use the classic text parser, whichever you prefer.
 
 ### Parser verbs
 

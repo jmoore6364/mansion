@@ -139,8 +139,8 @@
     <canvas id="screen" width="320" height="200"></canvas>
     <div id="crt"></div>
   </div>
-  <div id="hint">Arrow keys = walk &nbsp;•&nbsp; Type a command + Enter &nbsp;•&nbsp; LOOK / GET / OPEN / USE / WIND / SAVE / LOAD / HELP<br>
-  M = sound &nbsp;•&nbsp; T = CRT filter</div>
+  <div id="hint">Arrow keys = walk &nbsp;•&nbsp; Click an object to interact, or click the floor to walk &nbsp;•&nbsp; Type a command + Enter<br>
+  LOOK / GET / OPEN / USE / WIND / SAVE / LOAD &nbsp;•&nbsp; I = inventory &nbsp;•&nbsp; M = sound &nbsp;•&nbsp; T = CRT filter</div>
 
   <!-- Title / death / win screen buttons (tap to advance) -->
   <div id="screenbtns" class="hidden">
@@ -164,6 +164,7 @@
       <button class="rbtn dbtn down"  data-dir="ArrowDown"  aria-label="down">&#9660;</button>
     </div>
     <div id="toggles">
+      <button id="btnInv" class="rbtn">ITEMS</button>
       <button id="btnSound" class="rbtn">SOUND</button>
       <button id="btnCRT" class="rbtn">CRT</button>
     </div>
@@ -413,7 +414,9 @@ const game = {
   inv: [], flags: {},
   msg: "", msgTimer: 0, textColor: 15,
   deathCause: "",
-  score: 0, deaths: 0, awarded: {}
+  score: 0, deaths: 0, awarded: {},
+  target: null,   // point-and-click walk target {x,y}
+  invOpen: false  // inventory panel visible
 };
 function flag(k){ return !!game.flags[k]; }
 function setFlag(k,v){ game.flags[k] = (v===undefined?true:v); }
@@ -506,6 +509,13 @@ const ITEMS = {
   music:   { name:"an antique music box" },
   lantern: { name:"a lit brass lantern" }
 };
+const ITEM_DESC = {
+  key:    "A heavy brass key, worn smooth. It let you into the shop.",
+  oil:    "A dented oil can, still half full. Good for stuck, rusted mechanisms.",
+  coin:   "A cold tarnished silver coin. About the size of a certain slot...",
+  music:  "Penelope's antique music box. Winding it in the right place may matter.",
+  lantern:"A lit brass lantern, burning warm and steady. It banishes the dark."
+};
 
 /* =========================================================
    ROOMS
@@ -515,6 +525,13 @@ const rooms = {
   street: {
     name:"Cobblestone Street",
     walk:{x:8,y:140,w:304,h:48}, enterX:150, enterY:150,
+    hotspots:[
+      {x:148,y:120,w:44,h:16, cmd:()=> flag("mat_moved")?"look mat":"get mat"},
+      {x:150,y:72,w:40,h:60,  cmd:()=> flag("door_open")?"go in":"open door"},
+      {x:96,y:30,w:128,h:16,  cmd:"look sign"},
+      {x:250,y:14,w:30,h:28,  cmd:"look moon"},
+      {x:18,y:58,w:24,h:64,   cmd:"look lamp"}
+    ],
     draw(){
       rect(0,0,W,120, 1);
       rect(255,16,22,22,15); rect(252,20,22,16,15);
@@ -562,6 +579,14 @@ const rooms = {
   shop: {
     name:"Inside the Antique Shop",
     walk:{x:8,y:150,w:304,h:38}, enterX:40, enterY:158,
+    hotspots:[
+      {x:8,y:96,w:40,h:64,   cmd:"go street"},
+      {x:286,y:40,w:34,h:120,cmd:"go up"},
+      {x:150,y:40,w:44,h:120,cmd:()=> flag("clock_open")?"go down":(flag("clock_oiled")?"open clock":(hasItem("oil")?"use oil":"look clock"))},
+      {x:228,y:38,w:48,h:44, cmd:()=> flag("music_taken")?"look shelf":"get box"},
+      {x:104,y:144,w:24,h:16,cmd:()=> flag("oil_taken")?"look oil":"get oil"},
+      {x:60,y:128,w:40,h:32, cmd:"look crate"}
+    ],
     draw(){
       rect(0,0,W,160, 6); dither(0,0,W,160, 6,8);
       rect(0,160,W,40, 8);
@@ -629,6 +654,13 @@ const rooms = {
   upstairs: {
     name:"The Upstairs Parlor",
     walk:{x:8,y:150,w:304,h:38}, enterX:280, enterY:158,
+    hotspots:[
+      {x:286,y:40,w:34,h:120,cmd:"go down"},
+      {x:222,y:86,w:30,h:38, cmd:()=> flag("lantern_taken")?"look lantern":"get lantern"},
+      {x:150,y:36,w:40,h:46, cmd:"look portrait"},
+      {x:40,y:30,w:52,h:70,  cmd:"look window"},
+      {x:210,y:118,w:56,h:12,cmd:"look table"}
+    ],
     draw(){
       // wallpapered parlor
       rect(0,0,W,160, 5); dither(0,0,W,160, 5,1);
@@ -679,6 +711,11 @@ const rooms = {
   catacombs: {
     name:"The Catacombs",
     walk:{x:8,y:150,w:304,h:38}, enterX:30, enterY:158,
+    hotspots:[
+      {x:6,y:96,w:34,h:64,   cmd:"go up"},
+      {x:120,y:118,w:70,h:42,cmd:()=> (flag("sarc_looked")&&!flag("coin_taken"))?"get coin":"look sarcophagus"},
+      {x:264,y:80,w:48,h:80, cmd:()=> flag("gate_open")?"go east":(hasItem("coin")?"use coin":"look gate")}
+    ],
     draw(){
       // Without a light source, the catacombs are pitch black.
       if(!hasItem("lantern")){
@@ -755,6 +792,10 @@ const rooms = {
   crypt: {
     name:"The Forgotten Crypt",
     walk:{x:40,y:150,w:240,h:38}, enterX:50, enterY:158,
+    hotspots:[
+      {x:8,y:96,w:30,h:64,   cmd:"go west"},
+      {x:132,y:70,w:56,h:52, cmd:()=> (!flag("freed")&&hasItem("music"))?"wind box":"look penelope"}
+    ],
     draw(){
       rect(0,0,W,160,0); dither(0,0,W,160,1,0);
       rect(0,160,W,40,8); rect(0,160,W,2,0);
@@ -845,7 +886,7 @@ function handleCommand(raw){
 
   switch(verb){
     case "help":
-      return say("VERBS: LOOK, GET, OPEN, USE, WIND, INVENTORY, GO, SAVE, LOAD. Move with ARROW KEYS; walk into doorways/edges to travel.",11);
+      return say("TAP or CLICK objects to interact, tap the floor to walk. Or type: LOOK, GET, OPEN, USE, WIND, INVENTORY, GO, SAVE, LOAD. Open ITEMS for your inventory.",11);
 
     case "save": {
       const ok = saveGame();
@@ -1018,6 +1059,7 @@ function handleCommand(raw){
 function travel(id){
   const r = rooms[id]; if(!r) return;
   game.room = id; game.px = r.enterX; game.py = r.enterY; game.walking=false;
+  game.target = null; game.invOpen = false;
   Sound.door(); Haptic.buzz(12);
   if(id==="shop") award("shop");
   if(id==="catacombs") award("descend");
@@ -1046,6 +1088,7 @@ const elContinue   = document.getElementById("btnContinue");
 const elSend       = document.getElementById("send");
 const elSound      = document.getElementById("btnSound");
 const elCRT        = document.getElementById("btnCRT");
+const elInv        = document.getElementById("btnInv");
 const elDpad       = document.getElementById("dpad");
 const elStage      = document.getElementById("stage");
 
@@ -1101,6 +1144,7 @@ window.addEventListener("keydown", (e)=>{
   const typing = (document.activeElement===parserInput);
   if((e.key==="t"||e.key==="T") && !typing){ setCRT(!crtOn); return; }
   if((e.key==="m"||e.key==="M") && !typing){ Sound.toggleMute(); updateToggleLabels(); return; }
+  if((e.key==="i"||e.key==="I") && !typing && game.scene==="play"){ toggleInv(); return; }
 
   if(e.key==="ArrowLeft"||e.key==="ArrowRight"||e.key==="ArrowUp"||e.key==="ArrowDown"){
     if(game.scene==="play") keys[e.key]=true;
@@ -1123,7 +1167,7 @@ parserInput.addEventListener("keydown",(e)=>{
 window.addEventListener("keydown",(e)=>{
   if(game.scene!=="play" || TOUCH) return;
   if(e.key.length===1 && /[a-z0-9 '?]/i.test(e.key) && document.activeElement!==parserInput){
-    if(/[mt]/i.test(e.key)) return; // reserved toggles
+    if(/[mti]/i.test(e.key)) return; // reserved toggles (mute / crt / inventory)
     parserInput.focus();
   }
 });
@@ -1151,16 +1195,53 @@ elPrimary.addEventListener("click",()=>{ ensureAudioOnGesture(); pressEnter(); }
 elContinue.addEventListener("click",()=>{ ensureAudioOnGesture(); pressContinue(); });
 elSound.addEventListener("click",()=>{ ensureAudioOnGesture(); Sound.toggleMute(); updateToggleLabels(); });
 elCRT.addEventListener("click",()=>{ setCRT(!crtOn); });
+elInv.addEventListener("click",()=>{ ensureAudioOnGesture(); toggleInv(); });
 
-// Tap the screen to advance non-play screens (title tap only when no save, to
-// protect an existing saved game — use CONTINUE/NEW GAME buttons otherwise).
+// Convert a pointer event to internal 320x200 game coordinates.
+function eventToGame(e){
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) * (W / r.width),
+    y: (e.clientY - r.top)  * (H / r.height)
+  };
+}
+function runHotspot(cmd){
+  const c = (typeof cmd === "function") ? cmd() : cmd;
+  if(c) handleCommand(c);
+}
+function setWalkTarget(gx,gy){
+  const wb = rooms[game.room].walk;
+  let tx = gx-5, ty = gy-19;
+  tx = Math.max(wb.x, Math.min(wb.x+wb.w-11, tx));
+  ty = Math.max(wb.y-19, Math.min(wb.y+wb.h-19, ty));
+  game.target = {x:tx, y:ty};
+}
+function toggleInv(){ if(game.scene==="play"){ game.invOpen=!game.invOpen; Sound.blip(); } }
+
+// Tap the stage: advance menus, work the inventory, hit objects, or walk.
 elStage.addEventListener("pointerdown",(e)=>{
   ensureAudioOnGesture();
-  if(game.scene==="play") return;
+  if(game.scene!=="play"){
+    e.preventDefault();
+    if(game.scene==="title"){ if(!hasSave()) startNew(); }
+    else if(game.scene==="dead") respawn();
+    else if(game.scene==="win") resetGame();
+    return;
+  }
   e.preventDefault();
-  if(game.scene==="title"){ if(!hasSave()) startNew(); }
-  else if(game.scene==="dead") respawn();
-  else if(game.scene==="win") resetGame();
+  const p = eventToGame(e);
+  // Inventory open: tap an item to examine, tap anywhere else to close.
+  if(game.invOpen){
+    const hit = invRows().find(r=> p.x>=r.x && p.x<=r.x+r.w && p.y>=r.y-2 && p.y<=r.y+r.h);
+    if(hit) say(ITEM_DESC[hit.id] || ("It's "+ITEMS[hit.id].name+"."), 11);
+    game.invOpen = false;
+    return;
+  }
+  if(p.y >= 160) return; // taps on the text/HUD strip do nothing
+  const room = rooms[game.room];
+  const hs = (room.hotspots||[]).find(h=> p.x>=h.x && p.x<=h.x+h.w && p.y>=h.y && p.y<=h.y+h.h);
+  if(hs){ runHotspot(hs.cmd); return; }
+  setWalkTarget(p.x, p.y);   // otherwise walk there
 });
 
 function startNew(){
@@ -1179,13 +1260,23 @@ const SPEED = 1.4;
 let stepTimer = 0;
 function update(){
   if(game.scene!=="play") return;
+  if(game.invOpen){ game.walking=false; return; }   // paused while inventory is open
   const room = rooms[game.room];
   const wb = room.walk;
+  // Manual controls override any point-and-click target.
+  if(keys.ArrowLeft||keys.ArrowRight||keys.ArrowUp||keys.ArrowDown) game.target=null;
   let dx=0, dy=0, moving=false;
   if(keys.ArrowLeft){ dx-=SPEED; game.facing=-1; }
   if(keys.ArrowRight){ dx+=SPEED; game.facing=1; }
   if(keys.ArrowUp){ dy-=SPEED; }
   if(keys.ArrowDown){ dy+=SPEED; }
+  // Point-and-click: walk toward the tapped target.
+  if(game.target){
+    const ddx=game.target.x-game.px, ddy=game.target.y-game.py;
+    const dist=Math.hypot(ddx,ddy);
+    if(dist<=SPEED){ game.px=game.target.x; game.py=game.target.y; game.target=null; }
+    else { dx+=SPEED*ddx/dist; dy+=SPEED*ddy/dist; game.facing = ddx<0?-1:1; }
+  }
   if(dx||dy){
     moving=true;
     game.px += dx; game.py += dy;
@@ -1194,22 +1285,23 @@ function update(){
     if(game.px > wb.x+wb.w-11) game.px = wb.x+wb.w-11;
     if(footY < wb.y) game.py = wb.y-19;
     if(footY > wb.y+wb.h) game.py = wb.y+wb.h-19;
-
-    // EDGE-TRIGGERED TRAVEL
-    if(game.room==="street"){
-      if(flag("door_open") && game.px>146 && game.px<188 && keys.ArrowUp){ travel("shop"); }
-    } else if(game.room==="shop"){
-      if(game.px <= wb.x+1){ travel("street"); }
-      if(game.px >= wb.x+wb.w-12){ travel("upstairs"); }
-      if(flag("clock_open") && game.px>150 && game.px<196 && keys.ArrowUp){ travel("catacombs"); }
-    } else if(game.room==="upstairs"){
-      if(game.px >= wb.x+wb.w-12){ travel("shop"); }
-    } else if(game.room==="catacombs"){
-      if(game.px <= wb.x+1){ travel("shop"); }
-      if(flag("gate_open") && game.px >= wb.x+wb.w-12){ travel("crypt"); }
-    } else if(game.room==="crypt"){
-      if(game.px <= wb.x+1){ travel("catacombs"); }
-    }
+  }
+  // EDGE-TRIGGERED TRAVEL — left/right edges trigger every frame (works for
+  // both walking and point-and-click); vertical transitions need walk intent.
+  if(game.room==="shop"){
+    if(game.px <= wb.x+1){ travel("street"); }
+    else if(game.px >= wb.x+wb.w-12){ travel("upstairs"); }
+  } else if(game.room==="upstairs"){
+    if(game.px >= wb.x+wb.w-12){ travel("shop"); }
+  } else if(game.room==="catacombs"){
+    if(game.px <= wb.x+1){ travel("shop"); }
+    else if(flag("gate_open") && game.px >= wb.x+wb.w-12){ travel("crypt"); }
+  } else if(game.room==="crypt"){
+    if(game.px <= wb.x+1){ travel("catacombs"); }
+  }
+  if(moving){
+    if(game.room==="street" && flag("door_open") && game.px>146 && game.px<188 && keys.ArrowUp){ travel("shop"); }
+    if(game.room==="shop" && flag("clock_open") && game.px>150 && game.px<196 && keys.ArrowUp){ travel("catacombs"); }
   }
   game.walking = moving;
   if(moving){
@@ -1237,6 +1329,24 @@ function drawTopBar(){
   const dt = "DEATHS "+game.deaths;
   text(dt, W-2-textWidth(dt), 1, 12);
 }
+
+/* ---- inventory panel ---- */
+function invRows(){
+  return game.inv.map((id,i)=>({ id, x:50, y:48+i*16, w:220, h:14 }));
+}
+function drawInventory(){
+  rect(36,20,248,134,0);
+  rect(36,20,248,2,15); rect(36,152,248,2,15);
+  rect(36,20,2,134,15); rect(282,20,2,134,15);
+  textCentered("- INVENTORY -", 28, 14);
+  if(game.inv.length===0){
+    textCentered("YOU ARE EMPTY-HANDED", 72, 7);
+  } else {
+    for(const r of invRows()) text("* "+ITEMS[r.id].name, r.x+6, r.y, 11);
+  }
+  textCentered(TOUCH ? "TAP AN ITEM TO EXAMINE" : "PRESS I OR CLICK TO CLOSE", 134, 8);
+  if(TOUCH) textCentered("TAP OUTSIDE TO CLOSE", 144, 8);
+}
 function renderPlay(){
   const room = rooms[game.room];
   room.draw();
@@ -1244,6 +1354,7 @@ function renderPlay(){
   drawSprite(frame, game.px|0, game.py|0, game.facing<0);
   drawTopBar();
   drawHUD();
+  if(game.invOpen) drawInventory();
 }
 
 function renderTitle(){
