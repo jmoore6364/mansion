@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Hugo IV: The Antique Shop of Horrors</title>
 <style>
   html, body {
@@ -202,6 +205,9 @@ const EGA = [
   [255,85,85],[255,85,255],[255,255,85],[255,255,255]
 ];
 const RGB = EGA.map(c => `rgb(${c[0]},${c[1]},${c[2]})`);
+
+/* Build tag — bump on each deploy to bust cached art (see loadImg). */
+const BUILD = "20260625a";
 
 /* ---------- Canvas setup ---------- */
 const W = 320, H = 200;
@@ -517,7 +523,9 @@ function drawHexSprite(map,x,y,flip){
 const IMG = {};
 function loadImg(src){
   if(IMG[src]) return IMG[src];
-  const im = new Image(); im.src = src; IMG[src] = im; return im;
+  // Append the build tag so updated art is never served from a stale cache.
+  const im = new Image(); im.src = src + (src.includes("?")?"&":"?") + "v=" + BUILD;
+  IMG[src] = im; return im;
 }
 function blitBg(src){
   if(!src) return false;
