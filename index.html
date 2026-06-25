@@ -413,41 +413,93 @@ const Sound = (() => {
 })();
 
 /* =========================================================
-   SPRITES (pixel maps); '.' = transparent
+   SPRITES (hex pixel maps); '.' = transparent
    ========================================================= */
-const SPR = {
-  '.':-1,'H':6,'h':8,'F':14,'S':12,'s':4,'P':1,'p':9,'B':0,'W':15,'k':0,
-  'D':13,'d':5,'Y':14,'G':10
-};
+// Hero/heroine sprites: 12x24, hex-per-pixel (see tools/bake_sprites.js).
+// Drawn with drawHexSprite. SW/SH are the shared footprint used by movement,
+// edge-travel and the walk-target marker.
+const SW = 12, SH = 24;
 const HUGO_A = [
-  "...HHHHH...","..HHHHHHH..","..HhFFFhh..","..hFFFFFh..","..hFBFBFh..",
-  "..hFFFFFh..","...hFFFh...","..WWSSSWW..",".WSSSSSSSW.","WSSSSSSSSSW",
-  "WSsSSSSSsSW",".SSSSSSSSS.","..SSSSSSS..","..PPP.PPP..","..PPP.PPP..",
-  "..PPP.PPP..","..PP...PP..","..kk...kk..",".kkk...kkk."
+  "............",
+  "...666666...",
+  "..66666666..",
+  "..6CCCCCC6..",
+  "..6CCCCCC6..",
+  "..6C0CC0C6..",
+  "..6CCCCCC6..",
+  "..6CC44CC6..",
+  "...CCCCCC...",
+  "...777777...",
+  "..77744777..",
+  ".C77744777C.",
+  ".C77744777C.",
+  ".C77744777C.",
+  "..77744777..",
+  "..77777777..",
+  "..11111111..",
+  "..11111111..",
+  "..111..111..",
+  "..111..111..",
+  "..111..111..",
+  "..111..111..",
+  "..000..000..",
+  ".0000..0000."
 ];
 const HUGO_B = [
-  "...HHHHH...","..HHHHHHH..","..HhFFFhh..","..hFFFFFh..","..hFBFBFh..",
-  "..hFFFFFh..","...hFFFh...","..WWSSSWW..",".WSSSSSSSW.","WSSSSSSSSSW",
-  "WSsSSSSSsSW",".SSSSSSSSS.","..SSSSSSS..","..PPP.PPP..","..PPP.PPP..",
-  "...PP.PP...","...PP.PP...","..kk...kk..","..kkk.kkk.."
+  "............",
+  "...666666...",
+  "..66666666..",
+  "..6CCCCCC6..",
+  "..6CCCCCC6..",
+  "..6C0CC0C6..",
+  "..6CCCCCC6..",
+  "..6CC44CC6..",
+  "...CCCCCC...",
+  "...777777...",
+  "..77744777..",
+  ".C77744777C.",
+  ".C77744777C.",
+  ".C77744777C.",
+  "..77744777..",
+  "..77777777..",
+  "..11111111..",
+  "..11111111..",
+  "...111111...",
+  "...11..11...",
+  "...11..11...",
+  "...11..11...",
+  "...00..00...",
+  "..000..000.."
 ];
-// Penelope: yellow hair, magenta dress
+// Penelope: blonde hair, magenta dress
 const PEN = [
-  "...YYYYY...","..YYYYYYY..","..YhFFFhY..","..hFFFFFh..","..hFBFBFh..",
-  "..hFFFFFh..","...hFFFh...","...DDDDD...","..DDDDDDD..",".DDDDDDDDD.",
-  "DDDDDDDDDDD","DDDDdDDDDDD",".DDDDDDDDD.",".DDDDDDDDD.","..DDDDDDD..",
-  "..DDDDDDD..","...DDDDD...","...k...k...","..kk...kk.."
+  "............",
+  "...EEEEEE...",
+  "..EEEEEEEE..",
+  ".EECCCCCCEE.",
+  ".EECCCCCCEE.",
+  "..EC0CC0CE..",
+  "..ECCCCCCE..",
+  "..ECC44CCE..",
+  "...CCCCCC...",
+  "...DDDDDD...",
+  "..DDDDDDDD..",
+  ".CDDDDDDDDC.",
+  ".CDDDDDDDDC.",
+  "..DDDDDDDD..",
+  "..DDD55DDD..",
+  ".DDDD55DDDD.",
+  ".DDDDDDDDDD.",
+  ".DDDDDDDDDD.",
+  ".DDDDDDDDDD.",
+  "..DDDDDDDD..",
+  "..DDD..DDD..",
+  "...D....D...",
+  "...0....0...",
+  "..00....00.."
 ];
-function drawSprite(map,x,y,flip){
-  const h = map.length, w = map[0].length;
-  for(let j=0;j<h;j++) for(let i=0;i<w;i++){
-    const ch = map[j][flip ? (w-1-i) : i];
-    const c = SPR[ch];
-    if(c>=0) px(x+i, y+j, c);
-  }
-}
-// Sprites authored in editor.html use a hex-per-pixel format: each char is an
-// EGA index 0-9/A-F and '.' is transparent. Paste the exported array and draw it here.
+// Sprites use a hex-per-pixel format (see editor.html / tools/bake_sprites.js):
+// each char is an EGA index 0-9/A-F and '.' is transparent.
 function drawHexSprite(map,x,y,flip){
   const h = map.length, w = map[0].length;
   for(let j=0;j<h;j++) for(let i=0;i<w;i++){
@@ -687,6 +739,17 @@ const rooms = {
       {x:104,y:144,w:24,h:16,cmd:()=> flag("oil_taken")?"look oil":"get oil"},
       {x:60,y:128,w:40,h:32, cmd:"look crate"}
     ],
+    bg:"art/shop.png",
+    over(){
+      text("EXIT", 14,120, 14); text("UP", 296, 120, 11);
+      text("DUSTY ANTIQUES EVERYWHERE", 70, 8, 14);
+      if(!flag("music_taken")){
+        rect(238,52,28,18, 5); rect(238,52,28,4,13);
+        rect(244,46,16,6,14); rect(250,40,4,8,7);
+      }
+      if(flag("clock_open")){ rect(154,44,36,112,0); rect(160,60,24,90,1); text("DOWN",162,96,11); }
+      if(!flag("oil_taken")){ rect(108,150,12,8,8); rect(110,146,4,4,7); rect(118,148,5,2,8); }
+    },
     draw(){
       rect(0,0,W,160, 6); dither(0,0,W,160, 6,8);
       rect(0,160,W,40, 8);
@@ -761,6 +824,15 @@ const rooms = {
       {x:40,y:30,w:52,h:70,  cmd:"look window"},
       {x:210,y:118,w:56,h:12,cmd:"look table"}
     ],
+    bg:"art/upstairs.png",
+    over(){
+      text("DOWN", 290, 120, 11); text("THE PARLOR ABOVE", 96, 8, 13);
+      if(!flag("lantern_taken")){
+        const g=(Math.sin(performance.now()/180)>0)?14:12;
+        rect(230,96,16,22,6); rect(232,98,12,18,g);
+        rect(234,90,8,6,6); rect(236,86,4,4,7);
+      }
+    },
     draw(){
       // wallpapered parlor
       rect(0,0,W,160, 5); dither(0,0,W,160, 5,1);
@@ -817,6 +889,23 @@ const rooms = {
       {x:120,y:118,w:70,h:42,cmd:()=> (flag("sarc_looked")&&!flag("coin_taken"))?"get coin":"look sarcophagus"},
       {x:264,y:80,w:48,h:80, cmd:()=> flag("gate_open")?"go east":(hasItem("coin")?"use coin":"look gate")}
     ],
+    bg:"art/catacombs.png",
+    bgWhen:()=> hasItem("lantern"),   // pitch black without a light -> procedural
+    over(){
+      text("UP", 14,118, 11); text("COLD STONE AND OLD BONES", 70, 8, 7);
+      const fl=(Math.sin(performance.now()/120)>0)?12:14;
+      rect(92,52,12,10,fl); rect(95,48,6,6,15);
+      rect(216,52,12,10,fl); rect(219,48,6,6,15);
+      const ge=(Math.sin(performance.now()/280)>0)?12:4;
+      rect(58,102,5,5,ge); rect(70,102,5,5,ge);
+      if(flag("coin_taken")===false && flag("sarc_looked")){ rect(176,116,7,7,14); rect(177,117,5,5,7); }
+      if(flag("gate_open")){ text("EAST",272,116,11); }
+      else {
+        for(let x=270;x<308;x+=8) rect(x,82,3,76,7);
+        for(let y=86;y<158;y+=18) rect(266,y,44,3,7);
+        rect(284,120,8,3,14); text("SLOT",270,166,14);
+      }
+    },
     draw(){
       // Without a light source, the catacombs are pitch black.
       if(!hasItem("lantern")){
@@ -904,6 +993,15 @@ const rooms = {
       {x:132,y:70,w:56,h:52, cmd:()=> (!flag("freed")&&hasItem("music"))?"wind box":"look penelope"},
       {x:282,y:90,w:30,h:70, cmd:()=> flag("lab_open")?"go east":"look around"}
     ],
+    bg:"art/crypt.png",
+    over(){
+      text("WEST",10,118,11); text("THE FORGOTTEN CRYPT", 96, 8, 13);
+      if(flag("lab_open")){ rect(282,90,30,70,0); rect(284,92,26,66,4); text("EAST",284,118,14); }
+      for(const cx of [70,250]){ const f=(Math.sin(performance.now()/100+cx)>0)?14:12; rect(cx-1,112,6,8,f); }
+      rect(134,72,52,48, flag("freed")?0:3);
+      if(flag("freed")){ rect(132,70,56,52,0); text("PENELOPE IS FREE!", 100, 20, 14); }
+      else { drawHexSprite(PEN, 148, 76, false); text("Z", 176,72,15); }
+    },
     draw(){
       rect(0,0,W,160,0); dither(0,0,W,160,1,0);
       rect(0,160,W,40,8); rect(0,160,W,2,0);
@@ -926,7 +1024,7 @@ const rooms = {
       rect(134,72,52,48, flag("freed")?0:3);
       if(!flag("freed")){
         // Penelope asleep inside
-        drawSprite(PEN, 148, 78, false);
+        drawHexSprite(PEN, 148, 78, false);
         // zzz
         text("Z", 176,76,15);
       }
@@ -961,6 +1059,25 @@ const rooms = {
       {x:150,y:84,w:30,h:76, cmd:()=> flag("defeated")?"look lever":"pull lever"},
       {x:250,y:60,w:60,h:100,cmd:"look hammerstein"}
     ],
+    bg:"art/lab.png",
+    over(){
+      text("WEST",8,118,11); text("HAMMERSTEIN'S LABORATORY", 70, 8, 12);
+      if(!flag("gloves_taken")){ rect(54,120,8,10,9); rect(64,120,8,10,9); }
+      if(!flag("defeated")){
+        const s=(Math.sin(performance.now()/90)>0);
+        rect(150,28,10,14,7); rect(153,18,4,12, s?11:9);
+        if(s){ line(155,18,148,6,11); line(155,18,164,8,11); }
+      } else { rect(150,28,10,14,8); }
+      rect(128,90,12,12, flag("defeated")?8:10); rect(150,90,12,12, flag("defeated")?8:12);
+      rect(160,(flag("defeated")?112:86),10,8,4);
+      if(!flag("defeated")){
+        rect(258,60,28,54,15); rect(262,46,20,16,14);
+        rect(266,50,3,3,0); rect(276,50,3,3,0);
+        rect(258,40,28,8,7); rect(254,42,8,6,7); rect(286,42,8,6,7);
+        rect(262,114,8,20,8); rect(278,114,8,20,8);
+        text("MWAHAHA!", 244, 30, 12);
+      } else { rect(252,150,44,8,8); text("DEFEATED", 250, 140, 8); }
+    },
     draw(){
       rect(0,0,W,160,0); dither(0,0,W,160,1,0);
       rect(0,160,W,40,8); rect(0,160,W,2,0);
@@ -1523,25 +1640,25 @@ function update(){
   if(dx||dy){
     moving=true;
     game.px += dx; game.py += dy;
-    const footY = game.py + 19;
+    const footY = game.py + SH;
     if(game.px < wb.x) game.px = wb.x;
-    if(game.px > wb.x+wb.w-11) game.px = wb.x+wb.w-11;
-    if(footY < wb.y) game.py = wb.y-19;
-    if(footY > wb.y+wb.h) game.py = wb.y+wb.h-19;
+    if(game.px > wb.x+wb.w-SW) game.px = wb.x+wb.w-SW;
+    if(footY < wb.y) game.py = wb.y-SH;
+    if(footY > wb.y+wb.h) game.py = wb.y+wb.h-SH;
   }
   // EDGE-TRIGGERED TRAVEL — left/right edges trigger every frame (works for
   // both walking and point-and-click); vertical transitions need walk intent.
   if(game.room==="shop"){
     if(game.px <= wb.x+1){ travel("street"); }
-    else if(game.px >= wb.x+wb.w-12){ travel("upstairs"); }
+    else if(game.px >= wb.x+wb.w-SW){ travel("upstairs"); }
   } else if(game.room==="upstairs"){
-    if(game.px >= wb.x+wb.w-12){ travel("shop"); }
+    if(game.px >= wb.x+wb.w-SW){ travel("shop"); }
   } else if(game.room==="catacombs"){
     if(game.px <= wb.x+1){ travel("shop"); }
-    else if(flag("gate_open") && game.px >= wb.x+wb.w-12){ travel("crypt"); }
+    else if(flag("gate_open") && game.px >= wb.x+wb.w-SW){ travel("crypt"); }
   } else if(game.room==="crypt"){
     if(game.px <= wb.x+1){ travel("catacombs"); }
-    else if(flag("lab_open") && game.px >= wb.x+wb.w-12){ travel("lab"); }
+    else if(flag("lab_open") && game.px >= wb.x+wb.w-SW){ travel("lab"); }
   } else if(game.room==="lab"){
     if(game.px <= wb.x+1){ travel("crypt"); }
   }
@@ -1613,7 +1730,7 @@ function outline(x,y,w,h,c){ rect(x,y,w,1,c); rect(x,y+h-1,w,1,c); rect(x,y,1,h,
 function drawTapFx(){
   // walk-to marker at the target's feet
   if(game.target){
-    const mx=(game.target.x+5)|0, my=(game.target.y+19)|0;
+    const mx=(game.target.x+(SW>>1))|0, my=(game.target.y+SH)|0;
     const c = (((performance.now()/120)|0)%2) ? 14 : 15;
     line(mx-3,my-3,mx+3,my+3,c); line(mx-3,my+3,mx+3,my-3,c);
   }
@@ -1626,16 +1743,18 @@ function drawTapFx(){
 }
 function renderPlay(){
   const room = rooms[game.room];
-  // Painted background if the room declares one and the PNG has loaded;
-  // otherwise fall back to the procedural scene. over() repaints dynamic bits.
-  if(blitBg(room.bg)){ if(room.over) room.over(); }
-  else room.draw();
+  // Painted background if the room declares one, its condition holds, and the
+  // PNG has loaded; otherwise fall back to the procedural scene. over() repaints
+  // the animated/flag-dependent bits and text labels on top of the painting.
+  if(room.bg && (!room.bgWhen || room.bgWhen()) && blitBg(room.bg)){
+    if(room.over) room.over();
+  } else room.draw();
   // Penelope follows once freed
   if(flag("freed") && game.follow && (game.room==="crypt"||game.room==="lab")){
-    drawSprite(PEN, game.follow.x|0, game.follow.y|0, game.facing<0);
+    drawHexSprite(PEN, game.follow.x|0, game.follow.y|0, game.facing<0);
   }
   const frame = (game.walking && game.walkPhase) ? HUGO_B : HUGO_A;
-  drawSprite(frame, game.px|0, game.py|0, game.facing<0);
+  drawHexSprite(frame, game.px|0, game.py|0, game.facing<0);
   drawTapFx();
   drawTopBar();
   drawHUD();
@@ -1701,8 +1820,8 @@ function renderWin(){
   rect(0,0,W,8,2); rect(0,H-8,W,8,2);
   dither(0,0,W,8,2,10); dither(0,H-8,W,8,10,2);
   // Hugo + Penelope together
-  drawSprite(HUGO_A, 130, 60, true);
-  drawSprite(PEN, 160, 60, false);
+  drawHexSprite(HUGO_A, 130, 60, true);
+  drawHexSprite(PEN, 160, 60, false);
   // little hearts
   for(const hx of [150,156]) { rect(hx,52,4,3,12); rect(hx+1,55,2,2,12); }
   textCentered("THE CURSE IS BROKEN", 30, 14);

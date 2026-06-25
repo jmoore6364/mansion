@@ -30,8 +30,18 @@ install). It has:
    with game state (items still on the floor, an opened gate, etc.). The room's
    existing `draw()` stays as the fallback when the PNG hasn't loaded.
 
-`art/street.png` is a worked example (see `tools/bake_street.js`, which bakes it
-from code). Repaint over it in the editor anytime.
+Every room is already painted: `street`, `shop`, `upstairs`, `catacombs`,
+`crypt`, and `lab`. They're baked from code as a starting point —
+`tools/bake_street.js` does the street, `tools/bake_rooms.js` does the five
+interiors (shared encoder in `tools/pnglib.js`). The animated bits (torch and
+candle flames, the sparking coil, Hammerstein, the lever) and flag-dependent
+items (the coin, the open clock/gate, the lantern, the glass case) are **not**
+baked — each room's `over()` redraws those on top every frame, and the
+catacombs use `bgWhen: () => hasItem("lantern")` so they stay pitch black until
+you bring a light. Repaint any of these in the editor and re-export over the PNG.
+
+Character sprites (`HUGO_A`, `HUGO_B`, `PEN`) are authored in `tools/bake_sprites.js`
+and live in `index.html` in the hex format described below.
 
 ## Add a sprite
 

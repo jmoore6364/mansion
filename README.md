@@ -86,11 +86,12 @@ rates a flawless run.
 
 ## Tech notes
 
-- **Graphics:** the authentic EGA 16-color palette, with **painted PNG room
-  backgrounds** (loaded from `art/`, with a procedural fallback) layered under
-  pixel-primitive scenes and a hand-built 5×7 bitmap font. Nearest-neighbor
-  scaling keeps every pixel sharp. A CSS **CRT overlay** adds scanlines, a
-  vignette, and a faint flicker.
+- **Graphics:** the authentic EGA 16-color palette. Every room has a **painted
+  PNG background** (loaded from `art/`, with a procedural fallback), with
+  animated and flag-dependent elements redrawn on top each frame via a per-room
+  `over()`. Larger 12×24 **hex-format character sprites** (Hugo, Penelope) and a
+  hand-built 5×7 bitmap font round it out. Nearest-neighbor scaling keeps every
+  pixel sharp; a CSS **CRT overlay** adds scanlines, a vignette, and a flicker.
 - **Art tools:** a self-contained EGA pixel editor ships in the repo
   (**`editor.html`**) — paint tools, the exact 16-color palette, sprite and full
   320×200 scene modes, PNG import (snapped to EGA), and export straight into the
