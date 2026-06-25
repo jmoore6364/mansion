@@ -131,6 +131,19 @@
   #toggles { display: none; gap: 10px; }
   body.touch #toggles { display: flex; }
   body.touch #hint { display: none; }     /* keyboard hint is irrelevant on touch */
+
+  /* Landscape phones: put the controls in a column beside the screen so the
+     canvas can use the full height instead of fighting for vertical space. */
+  @media (orientation: landscape) {
+    body.touch #wrap { flex-direction: row; gap: 14px; align-items: center; }
+    body.touch #playctrls { width: auto; }
+    body.touch #screenbtns { flex-direction: column; }
+    body.touch #cmdbar { width: 220px; }
+    body.touch #dpad {
+      grid-template-columns: repeat(3, 50px);
+      grid-template-rows: repeat(3, 50px);
+    }
+  }
 </style>
 </head>
 <body>
@@ -199,17 +212,20 @@ const parserInput = document.getElementById("parser");
 const crtEl = document.getElementById("crt");
 
 function fitScreen() {
-  // Reserve vertical room for the on-screen controls (bigger on touch).
+  // Reserve room for the on-screen controls. In portrait they stack below the
+  // canvas (vertical reserve); in landscape they sit beside it (horizontal).
   const isTouch = document.body.classList.contains("touch");
-  const reserve = isTouch ? 300 : 100;
-  const scale = Math.max(1, Math.floor(Math.min(
-    (window.innerWidth) / W,
-    (window.innerHeight - reserve) / H
-  )));
+  const landscape = window.innerWidth > window.innerHeight;
+  let availW = window.innerWidth, availH = window.innerHeight;
+  if(isTouch && landscape){ availW -= 250; availH -= 16; }
+  else if(isTouch){ availH -= 300; }
+  else { availH -= 100; }
+  const scale = Math.max(1, Math.floor(Math.min(availW / W, availH / H)));
   canvas.style.width = (W * scale) + "px";
   canvas.style.height = (H * scale) + "px";
 }
 window.addEventListener("resize", fitScreen);
+window.addEventListener("orientationchange", ()=> setTimeout(fitScreen, 100));
 fitScreen();
 
 /* ---------- Pixel drawing helpers ---------- */
@@ -416,7 +432,8 @@ const game = {
   deathCause: "",
   score: 0, deaths: 0, awarded: {},
   target: null,   // point-and-click walk target {x,y}
-  invOpen: false  // inventory panel visible
+  invOpen: false, // inventory panel visible
+  tapFx: null     // transient tap highlight {x,y,w,h,life}
 };
 function flag(k){ return !!game.flags[k]; }
 function setFlag(k,v){ game.flags[k] = (v===undefined?true:v); }
@@ -1240,7 +1257,7 @@ elStage.addEventListener("pointerdown",(e)=>{
   if(p.y >= 160) return; // taps on the text/HUD strip do nothing
   const room = rooms[game.room];
   const hs = (room.hotspots||[]).find(h=> p.x>=h.x && p.x<=h.x+h.w && p.y>=h.y && p.y<=h.y+h.h);
-  if(hs){ runHotspot(hs.cmd); return; }
+  if(hs){ game.tapFx={x:hs.x,y:hs.y,w:hs.w,h:hs.h,life:16}; runHotspot(hs.cmd); return; }
   setWalkTarget(p.x, p.y);   // otherwise walk there
 });
 
@@ -1347,11 +1364,27 @@ function drawInventory(){
   textCentered(TOUCH ? "TAP AN ITEM TO EXAMINE" : "PRESS I OR CLICK TO CLOSE", 134, 8);
   if(TOUCH) textCentered("TAP OUTSIDE TO CLOSE", 144, 8);
 }
+function outline(x,y,w,h,c){ rect(x,y,w,1,c); rect(x,y+h-1,w,1,c); rect(x,y,1,h,c); rect(x+w-1,y,1,h,c); }
+function drawTapFx(){
+  // walk-to marker at the target's feet
+  if(game.target){
+    const mx=(game.target.x+5)|0, my=(game.target.y+19)|0;
+    const c = (((performance.now()/120)|0)%2) ? 14 : 15;
+    line(mx-3,my-3,mx+3,my+3,c); line(mx-3,my+3,mx+3,my-3,c);
+  }
+  // brief highlight around a tapped hotspot
+  if(game.tapFx && game.tapFx.life>0){
+    const c = (game.tapFx.life%4<2) ? 15 : 14;
+    outline(game.tapFx.x-1, game.tapFx.y-1, game.tapFx.w+2, game.tapFx.h+2, c);
+    game.tapFx.life--;
+  }
+}
 function renderPlay(){
   const room = rooms[game.room];
   room.draw();
   const frame = (game.walking && game.walkPhase) ? HUGO_B : HUGO_A;
   drawSprite(frame, game.px|0, game.py|0, game.facing<0);
+  drawTapFx();
   drawTopBar();
   drawHUD();
   if(game.invOpen) drawInventory();
