@@ -207,7 +207,7 @@ const EGA = [
 const RGB = EGA.map(c => `rgb(${c[0]},${c[1]},${c[2]})`);
 
 /* Build tag — bump on each deploy to bust cached art (see loadImg). */
-const BUILD = "20260625a";
+const BUILD = "20260625b";
 
 /* ---------- Canvas setup ---------- */
 const W = 320, H = 200;
@@ -681,16 +681,17 @@ const rooms = {
     walk:{x:8,y:140,w:304,h:48}, enterX:150, enterY:150,
     bg:"art/street.png",   // painted background (editor.html); over() repaints dynamics
     over(){
-      // mat default state is baked into the PNG; repaint when it's been moved
-      if(flag("mat_moved")) rect(150,124,40,8,6);
-      else text("WELCOME", 152,125, 15);
+      text("YE OLDE ANTIQUES", 56, 102, 14);   // shop name on the marquee
+      // welcome mat at the step; baked step stays, mat text toggles
+      if(!flag("mat_moved")){ rect(150,150,40,5,4); text("WELCOME", 152,150, 15); }
     },
     hotspots:[
-      {x:148,y:120,w:44,h:16, cmd:()=> flag("mat_moved")?"look mat":"get mat"},
-      {x:150,y:72,w:40,h:60,  cmd:()=> flag("door_open")?"go in":"open door"},
-      {x:96,y:30,w:128,h:16,  cmd:"look sign"},
-      {x:250,y:14,w:30,h:28,  cmd:"look moon"},
-      {x:18,y:58,w:24,h:64,   cmd:"look lamp"}
+      {x:146,y:148,w:48,h:12, cmd:()=> flag("mat_moved")?"look mat":"get mat"},
+      {x:148,y:108,w:44,h:44, cmd:()=> flag("door_open")?"go in":"open door"},
+      {x:50,y:100,w:150,h:10, cmd:"look sign"},
+      {x:244,y:14,w:72,h:138, cmd:"look tree"},
+      {x:248,y:10,w:32,h:30,  cmd:"look moon"},
+      {x:18,y:46,w:26,h:80,   cmd:"look lamp"}
     ],
     draw(){
       rect(0,0,W,120, 1);
@@ -731,6 +732,9 @@ const rooms = {
       if(noun==="window") return say("Dusty glass. Vague shapes of furniture lurk within.",14);
       if(noun==="sign") return say("'YE OLDE ANTIQUES - Est. a very long time ago.'",14);
       if(noun==="lamp"||noun==="lamppost"||noun==="light") return say("A gas lamp flickers, fighting the fog.",14);
+      if(noun==="tree") return say("A gnarled old tree, its branches clawing at the moon. Something rustles in the leaves.",10);
+      if(noun==="pumpkin"||noun==="jack"||noun==="lantern"||noun==="jackolantern") return say("A grinning jack-o'-lantern guards the step, its candle long dead... or is it?",6);
+      if(noun==="bat") return say("A lone bat wheels across the face of the moon. Charming neighborhood.",7);
       return null;
     }
   },
