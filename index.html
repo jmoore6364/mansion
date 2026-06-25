@@ -446,6 +446,33 @@ function drawSprite(map,x,y,flip){
     if(c>=0) px(x+i, y+j, c);
   }
 }
+// Sprites authored in editor.html use a hex-per-pixel format: each char is an
+// EGA index 0-9/A-F and '.' is transparent. Paste the exported array and draw it here.
+function drawHexSprite(map,x,y,flip){
+  const h = map.length, w = map[0].length;
+  for(let j=0;j<h;j++) for(let i=0;i<w;i++){
+    const ch = map[j][flip ? (w-1-i) : i];
+    if(ch==="." ) continue;
+    const c = parseInt(ch,16);
+    if(c>=0 && c<16) px(x+i, y+j, c);
+  }
+}
+
+/* ---------- Painted-background loader (PNGs from editor.html, under art/) ----------
+   A room may set bg:"art/<name>.png". blitBg() draws it full-screen if the file
+   has loaded, and returns true; rooms fall back to their procedural draw() when
+   the art is absent, so the game always renders. */
+const IMG = {};
+function loadImg(src){
+  if(IMG[src]) return IMG[src];
+  const im = new Image(); im.src = src; IMG[src] = im; return im;
+}
+function blitBg(src){
+  if(!src) return false;
+  const im = IMG[src] || loadImg(src);
+  if(im.complete && im.naturalWidth>0){ ctx.drawImage(im, 0, 0, W, H); return true; }
+  return false;
+}
 
 /* =========================================================
    GAME STATE
@@ -592,6 +619,12 @@ const rooms = {
   street: {
     name:"Cobblestone Street",
     walk:{x:8,y:140,w:304,h:48}, enterX:150, enterY:150,
+    bg:"art/street.png",   // painted background (editor.html); over() repaints dynamics
+    over(){
+      // mat default state is baked into the PNG; repaint when it's been moved
+      if(flag("mat_moved")) rect(150,124,40,8,6);
+      else text("WELCOME", 152,125, 15);
+    },
     hotspots:[
       {x:148,y:120,w:44,h:16, cmd:()=> flag("mat_moved")?"look mat":"get mat"},
       {x:150,y:72,w:40,h:60,  cmd:()=> flag("door_open")?"go in":"open door"},
@@ -1593,7 +1626,10 @@ function drawTapFx(){
 }
 function renderPlay(){
   const room = rooms[game.room];
-  room.draw();
+  // Painted background if the room declares one and the PNG has loaded;
+  // otherwise fall back to the procedural scene. over() repaints dynamic bits.
+  if(blitBg(room.bg)){ if(room.over) room.over(); }
+  else room.draw();
   // Penelope follows once freed
   if(flag("freed") && game.follow && (game.room==="crypt"||game.room==="lab")){
     drawSprite(PEN, game.follow.x|0, game.follow.y|0, game.facing<0);

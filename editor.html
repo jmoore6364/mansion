@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>EGA Pixel Editor &mdash; Hugo IV Art Tool</title>
+<style>
+  :root{ --bg:#1a1a1a; --panel:#262626; --line:#3a3a3a; --ink:#d8d8d8; --accent:#55ff55; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; }
+  body{ display:flex; flex-direction:column; overflow:hidden; }
+  header{ padding:6px 10px; background:#111; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  header h1{ font-size:14px; margin:0; color:var(--accent); letter-spacing:1px; }
+  header .hint{ color:#888; font-size:11px; }
+  main{ flex:1; display:flex; min-height:0; }
+  .rail{ width:188px; background:var(--panel); border-right:1px solid var(--line);
+    padding:8px; overflow:auto; display:flex; flex-direction:column; gap:10px; }
+  .rail.right{ border-right:0; border-left:1px solid var(--line); width:210px; }
+  .stage{ flex:1; overflow:auto; display:flex; align-items:center; justify-content:center;
+    background:#0d0d0d; background-image:
+      linear-gradient(45deg,#151515 25%,transparent 25%,transparent 75%,#151515 75%),
+      linear-gradient(45deg,#151515 25%,transparent 25%,transparent 75%,#151515 75%);
+    background-size:16px 16px; background-position:0 0,8px 8px; padding:24px; }
+  canvas{ image-rendering:pixelated; image-rendering:crisp-edges; cursor:crosshair;
+    box-shadow:0 0 0 1px #000, 0 6px 24px rgba(0,0,0,.6); background:#000; }
+  .grp{ border:1px solid var(--line); border-radius:5px; padding:7px; }
+  .grp h2{ font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#9a9a9a;
+    margin:0 0 6px; }
+  button{ font:inherit; background:#333; color:var(--ink); border:1px solid #444;
+    border-radius:4px; padding:5px 7px; cursor:pointer; }
+  button:hover{ background:#3d3d3d; }
+  button.on{ background:var(--accent); color:#000; border-color:var(--accent); font-weight:bold; }
+  .row{ display:flex; gap:5px; flex-wrap:wrap; }
+  .tools button{ flex:1 1 30%; min-width:0; }
+  label{ display:flex; align-items:center; gap:6px; color:#bbb; }
+  input[type=number]{ width:58px; background:#1c1c1c; color:var(--ink); border:1px solid #444;
+    border-radius:4px; padding:3px; font:inherit; }
+  select{ background:#1c1c1c; color:var(--ink); border:1px solid #444; border-radius:4px; padding:4px; font:inherit; }
+  .pal{ display:grid; grid-template-columns:repeat(4,1fr); gap:4px; }
+  .sw{ aspect-ratio:1; border:2px solid #000; border-radius:3px; cursor:pointer; position:relative; }
+  .sw.sel{ border-color:#fff; box-shadow:0 0 0 2px var(--accent); }
+  .sw.tr{ background-image:
+      linear-gradient(45deg,#555 25%,transparent 25%,transparent 75%,#555 75%),
+      linear-gradient(45deg,#555 25%,transparent 25%,transparent 75%,#555 75%);
+    background-size:10px 10px; background-position:0 0,5px 5px; background-color:#222; }
+  .sw small{ position:absolute; bottom:1px; right:2px; font-size:8px; color:#000; mix-blend-mode:difference; }
+  textarea{ width:100%; height:150px; background:#111; color:#9fe89f; border:1px solid #444;
+    border-radius:4px; padding:6px; font:inherit; resize:vertical; white-space:pre; }
+  .out-actions{ display:flex; gap:5px; margin-top:5px; }
+  .out-actions button{ flex:1; }
+  .swatch-cur{ display:flex; align-items:center; gap:8px; }
+  .swatch-cur .box{ width:26px; height:26px; border:2px solid #000; border-radius:4px; }
+  footer{ padding:4px 10px; background:#111; border-top:1px solid var(--line); color:#888; font-size:11px; }
+  a{ color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>EGA PIXEL EDITOR</h1>
+  <span class="hint">16-color authentic EGA &middot; draws sprites &amp; full 320&times;200 scenes for Hugo IV</span>
+</header>
+<main>
+  <!-- LEFT RAIL: tools + canvas controls -->
+  <div class="rail">
+    <div class="grp">
+      <h2>Tool</h2>
+      <div class="row tools" id="tools">
+        <button data-tool="pencil" class="on">Pencil</button>
+        <button data-tool="line">Line</button>
+        <button data-tool="rect">Rect</button>
+        <button data-tool="fill">Fill</button>
+        <button data-tool="erase">Erase</button>
+        <button data-tool="pick">Pick</button>
+      </div>
+    </div>
+    <div class="grp">
+      <h2>Canvas</h2>
+      <label>Preset
+        <select id="preset">
+          <option value="11x19">Sprite 11&times;19 (Hugo)</option>
+          <option value="16x16">Sprite 16&times;16</option>
+          <option value="24x32">Sprite 24&times;32</option>
+          <option value="32x32">Sprite 32&times;32</option>
+          <option value="320x200">Scene 320&times;200</option>
+          <option value="custom">Custom&hellip;</option>
+        </select>
+      </label>
+      <div class="row" style="margin-top:6px;">
+        <label>W <input type="number" id="cw" min="1" max="320" value="11"></label>
+        <label>H <input type="number" id="ch" min="1" max="200" value="19"></label>
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <button id="resize">Resize</button>
+        <button id="clear">Clear</button>
+      </div>
+    </div>
+    <div class="grp">
+      <h2>View</h2>
+      <div class="row">
+        <button id="zoomOut">Zoom &minus;</button>
+        <span id="zoomLbl" style="align-self:center;color:#bbb;">x16</span>
+        <button id="zoomIn">Zoom +</button>
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <button id="gridBtn" class="on">Grid</button>
+        <button id="flipBtn">Flip view</button>
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <button id="undo">Undo</button>
+        <button id="redo">Redo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: the pixel canvas -->
+  <div class="stage" id="stage">
+    <canvas id="art" width="176" height="304"></canvas>
+  </div>
+
+  <!-- RIGHT RAIL: palette + import/export -->
+  <div class="rail right">
+    <div class="grp">
+      <h2>EGA Palette</h2>
+      <div class="swatch-cur" style="margin-bottom:7px;">
+        <div class="box" id="curBox"></div>
+        <span id="curLbl">#6 brown</span>
+      </div>
+      <div class="pal" id="pal"></div>
+    </div>
+    <div class="grp">
+      <h2>Import</h2>
+      <input type="file" id="png" accept="image/png,image/*" style="font-size:11px;width:100%;">
+      <div class="hint" style="margin-top:5px;color:#888;">PNG is snapped to the EGA
+        palette. Draw in Aseprite / Piskel, import here, then export.</div>
+    </div>
+    <div class="grp">
+      <h2>Export</h2>
+      <label style="margin-bottom:5px;">Name <input type="text" id="name" value="MYSPRITE"
+        style="flex:1;background:#1c1c1c;color:#d8d8d8;border:1px solid #444;border-radius:4px;padding:3px;font:inherit;"></label>
+      <div class="row">
+        <button id="genSpr">Sprite array</button>
+        <button id="genScene">Scene rows</button>
+      </div>
+      <div class="out-actions">
+        <button id="copy">Copy</button>
+        <button id="dlpng">Download PNG</button>
+      </div>
+    </div>
+    <div class="grp" style="flex:1;display:flex;flex-direction:column;">
+      <h2>Output</h2>
+      <textarea id="out" spellcheck="false" readonly></textarea>
+    </div>
+  </div>
+</main>
+<footer id="status">Ready. Left-drag paints &middot; right-drag erases &middot; Ctrl+Z undo. Sprites paste into index.html and draw with drawHexSprite(NAME, x, y).</footer>
+
+<script>
+"use strict";
+/* Authentic EGA 16-color palette (matches index.html) */
+const EGA = [
+  [0,0,0],[0,0,170],[0,170,0],[0,170,170],
+  [170,0,0],[170,0,170],[170,85,0],[170,170,170],
+  [85,85,85],[85,85,255],[85,255,85],[85,255,255],
+  [255,85,85],[255,85,255],[255,255,85],[255,255,255]
+];
+const NAMES = ["black","blue","green","cyan","red","magenta","brown","l.gray",
+  "d.gray","l.blue","l.green","l.cyan","l.red","l.magenta","yellow","white"];
+const HEX = "0123456789ABCDEF";
+const rgbStr = c => c<0 ? null : `rgb(${EGA[c][0]},${EGA[c][1]},${EGA[c][2]})`;
+
+/* ---- editor state ---- */
+let cols=11, rows=19, scale=16, cur=6, tool="pencil";
+let showGrid=true, flipView=false;
+let grid = make(cols,rows);            // -1 transparent, 0..15 palette index
+let undoStack=[], redoStack=[];
+
+function make(w,h){ return Array.from({length:h},()=>new Array(w).fill(-1)); }
+
+const cv = document.getElementById("art");
+const cx = cv.getContext("2d");
+cx.imageSmoothingEnabled = false;
+const $ = id => document.getElementById(id);
+
+/* ---------- palette UI ---------- */
+function buildPalette(){
+  const pal = $("pal"); pal.innerHTML="";
+  // transparent first
+  const tr = document.createElement("div");
+  tr.className="sw tr"; tr.title="transparent (erase)"; tr.dataset.c="-1";
+  pal.appendChild(tr);
+  for(let i=0;i<16;i++){
+    const d=document.createElement("div");
+    d.className="sw"; d.style.background=rgbStr(i); d.dataset.c=i; d.title=`#${i} ${NAMES[i]}`;
+    const s=document.createElement("small"); s.textContent=HEX[i]; d.appendChild(s);
+    pal.appendChild(d);
+  }
+  pal.querySelectorAll(".sw").forEach(el=>{
+    el.onclick=()=>setColor(+el.dataset.c);
+  });
+  setColor(cur);
+}
+function setColor(c){
+  cur=c;
+  document.querySelectorAll("#pal .sw").forEach(el=>el.classList.toggle("sel",+el.dataset.c===c));
+  $("curBox").style.background = c<0 ? "transparent" : rgbStr(c);
+  $("curLbl").textContent = c<0 ? "transparent" : `#${c} ${NAMES[c]}`;
+}
+
+/* ---------- canvas render ---------- */
+function resizeCanvas(){
+  cv.width = cols*scale; cv.height = rows*scale;
+  $("zoomLbl").textContent = "x"+scale;
+  redraw();
+}
+function redraw(){
+  cx.clearRect(0,0,cv.width,cv.height);
+  for(let y=0;y<rows;y++) for(let x=0;x<cols;x++){
+    const sx = flipView ? (cols-1-x) : x;
+    const c = grid[y][sx];
+    if(c<0){
+      // checkerboard for transparency
+      cx.fillStyle = ((x+y)&1) ? "#1b1b1b" : "#111";
+      cx.fillRect(x*scale,y*scale,scale,scale);
+    } else {
+      cx.fillStyle = rgbStr(c);
+      cx.fillRect(x*scale,y*scale,scale,scale);
+    }
+  }
+  if(showGrid && scale>=6){
+    cx.strokeStyle="rgba(255,255,255,.08)"; cx.lineWidth=1;
+    for(let x=0;x<=cols;x++){ cx.beginPath(); cx.moveTo(x*scale+.5,0); cx.lineTo(x*scale+.5,cv.height); cx.stroke(); }
+    for(let y=0;y<=rows;y++){ cx.beginPath(); cx.moveTo(0,y*scale+.5); cx.lineTo(cv.width,y*scale+.5); cx.stroke(); }
+  }
+  if(preview) drawPreview();
+}
+
+/* ---------- pointer / painting ---------- */
+let drawing=false, eraseBtn=false, preview=null, startCell=null;
+function cellAt(e){
+  const r=cv.getBoundingClientRect();
+  let x=Math.floor((e.clientX-r.left)/ (r.width/cols));
+  let y=Math.floor((e.clientY-r.top)/ (r.height/rows));
+  if(flipView) x=cols-1-x;
+  return {x,y};
+}
+function inBounds(x,y){ return x>=0&&y>=0&&x<cols&&y<rows; }
+function paint(x,y,c){ if(inBounds(x,y)) grid[y][x]=c; }
+
+cv.addEventListener("contextmenu",e=>e.preventDefault());
+cv.addEventListener("pointerdown",e=>{
+  e.preventDefault(); cv.setPointerCapture(e.pointerId);
+  pushUndo();
+  eraseBtn = (e.button===2);
+  const {x,y}=cellAt(e);
+  const c = (eraseBtn||tool==="erase") ? -1 : cur;
+  if(tool==="pick"){ if(inBounds(x,y)){ setColor(grid[y][x]); } popUndo(); return; }
+  if(tool==="fill"){ flood(x,y,c); redraw(); return; }
+  if(tool==="line"||tool==="rect"){ startCell={x,y}; preview={tool,c,from:{x,y},to:{x,y}}; drawing=true; redraw(); return; }
+  drawing=true; paint(x,y,c); redraw();
+});
+cv.addEventListener("pointermove",e=>{
+  const {x,y}=cellAt(e);
+  $("status").textContent = `(${x}, ${y})  tool:${tool}  size:${cols}x${rows}`;
+  if(!drawing) return;
+  const c = (eraseBtn||tool==="erase") ? -1 : cur;
+  if(preview){ preview.to={x,y}; redraw(); return; }
+  if(tool==="pencil"||tool==="erase"){ paint(x,y,c); redraw(); }
+});
+window.addEventListener("pointerup",e=>{
+  if(!drawing) return;
+  drawing=false;
+  if(preview){ commitPreview(); preview=null; redraw(); }
+  refreshOut();
+});
+
+function commitPreview(){
+  const {c,from,to}=preview;
+  if(preview.tool==="line") plotLine(from.x,from.y,to.x,to.y,(px,py)=>paint(px,py,c));
+  else { // rect outline
+    const x0=Math.min(from.x,to.x),x1=Math.max(from.x,to.x);
+    const y0=Math.min(from.y,to.y),y1=Math.max(from.y,to.y);
+    for(let x=x0;x<=x1;x++){ paint(x,y0,c); paint(x,y1,c); }
+    for(let y=y0;y<=y1;y++){ paint(x0,y,c); paint(x1,y,c); }
+  }
+}
+function drawPreview(){
+  const {c,from,to,tool:pt}=preview;
+  const col = c<0 ? "rgba(255,255,255,.5)" : rgbStr(c);
+  cx.fillStyle=col;
+  const plot=(px,py)=>{ const dx=flipView?(cols-1-px):px; cx.globalAlpha=.7; cx.fillRect(dx*scale,py*scale,scale,scale); cx.globalAlpha=1; };
+  if(pt==="line") plotLine(from.x,from.y,to.x,to.y,plot);
+  else {
+    const x0=Math.min(from.x,to.x),x1=Math.max(from.x,to.x);
+    const y0=Math.min(from.y,to.y),y1=Math.max(from.y,to.y);
+    for(let x=x0;x<=x1;x++){ plot(x,y0); plot(x,y1); }
+    for(let y=y0;y<=y1;y++){ plot(x0,y); plot(x1,y); }
+  }
+}
+function plotLine(x0,y0,x1,y1,fn){
+  let dx=Math.abs(x1-x0), dy=-Math.abs(y1-y0);
+  let sx=x0<x1?1:-1, sy=y0<y1?1:-1, err=dx+dy;
+  while(true){ fn(x0,y0); if(x0===x1&&y0===y1)break; const e2=2*err;
+    if(e2>=dy){ err+=dy; x0+=sx; } if(e2<=dx){ err+=dx; y0+=sy; } }
+}
+function flood(x,y,c){
+  if(!inBounds(x,y)) return;
+  const target=grid[y][x]; if(target===c) return;
+  const st=[[x,y]];
+  while(st.length){
+    const [px,py]=st.pop();
+    if(!inBounds(px,py)||grid[py][px]!==target) continue;
+    grid[py][px]=c;
+    st.push([px+1,py],[px-1,py],[px,py+1],[px,py-1]);
+  }
+}
+
+/* ---------- undo ---------- */
+function snap(){ return grid.map(r=>r.slice()); }
+function pushUndo(){ undoStack.push(snap()); if(undoStack.length>60) undoStack.shift(); redoStack.length=0; }
+function popUndo(){ undoStack.pop(); }   // cancel a no-op snapshot
+function undo(){ if(!undoStack.length) return; redoStack.push(snap()); grid=undoStack.pop(); redraw(); refreshOut(); }
+function redo(){ if(!redoStack.length) return; undoStack.push(snap()); grid=redoStack.pop(); redraw(); refreshOut(); }
+
+/* ---------- export ---------- */
+function toHexRows(){
+  return grid.map(row => row.map(c => c<0 ? "." : HEX[c]).join(""));
+}
+function genSprite(){
+  const name=($("name").value||"SPRITE").replace(/[^A-Za-z0-9_]/g,"").toUpperCase()||"SPRITE";
+  const rowsArr=toHexRows().map(r=>'  "'+r+'"').join(",\n");
+  $("out").value = `const ${name} = [\n${rowsArr}\n];\n// draw with: drawHexSprite(${name}, x, y);  // add flip=true to mirror`;
+}
+function genScene(){
+  const rowsArr=toHexRows().map(r=>'  "'+r+'"').join(",\n");
+  $("out").value = `// ${cols}x${rows} scene rows (hex per pixel, '.'=transparent)\nconst SCENE = [\n${rowsArr}\n];`;
+}
+function refreshOut(){
+  if($("out").value.startsWith("// ")) genScene(); else genSprite();
+}
+function downloadPNG(){
+  const off=document.createElement("canvas"); off.width=cols; off.height=rows;
+  const o=off.getContext("2d"); const img=o.createImageData(cols,rows);
+  for(let y=0;y<rows;y++) for(let x=0;x<cols;x++){
+    const c=grid[y][x]; const i=(y*cols+x)*4;
+    if(c<0){ img.data[i+3]=0; }
+    else { img.data[i]=EGA[c][0]; img.data[i+1]=EGA[c][1]; img.data[i+2]=EGA[c][2]; img.data[i+3]=255; }
+  }
+  o.putImageData(img,0,0);
+  off.toBlob(b=>{
+    const a=document.createElement("a");
+    a.download=(($("name").value||"art").toLowerCase())+".png";
+    a.href=URL.createObjectURL(b); a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  });
+}
+
+/* ---------- import PNG, quantized to EGA ---------- */
+function nearestEGA(r,g,b){
+  let best=0,bd=1e9;
+  for(let i=0;i<16;i++){
+    const dr=r-EGA[i][0],dg=g-EGA[i][1],db=b-EGA[i][2];
+    const d=dr*dr+dg*dg+db*db;
+    if(d<bd){ bd=d; best=i; }
+  }
+  return best;
+}
+function importPNG(file){
+  const url=URL.createObjectURL(file);
+  const im=new Image();
+  im.onload=()=>{
+    // resize editor to image (capped to 320x200) for a 1:1 import
+    cols=Math.min(320, im.naturalWidth); rows=Math.min(200, im.naturalHeight);
+    $("cw").value=cols; $("ch").value=rows;
+    const off=document.createElement("canvas"); off.width=cols; off.height=rows;
+    const o=off.getContext("2d"); o.imageSmoothingEnabled=false;
+    o.drawImage(im,0,0,cols,rows);
+    const d=o.getImageData(0,0,cols,rows).data;
+    grid=make(cols,rows);
+    for(let y=0;y<rows;y++) for(let x=0;x<cols;x++){
+      const i=(y*cols+x)*4;
+      grid[y][x] = d[i+3]<128 ? -1 : nearestEGA(d[i],d[i+1],d[i+2]);
+    }
+    fitZoom(); resizeCanvas(); refreshOut();
+    $("status").textContent=`Imported ${cols}x${rows} PNG, snapped to EGA.`;
+    URL.revokeObjectURL(url);
+  };
+  im.src=url;
+}
+function fitZoom(){
+  const stage=$("stage");
+  const availW=stage.clientWidth-48, availH=stage.clientHeight-48;
+  scale=Math.max(1, Math.floor(Math.min(availW/cols, availH/rows)));
+  if(scale>24) scale=24;
+}
+
+/* ---------- controls wiring ---------- */
+document.querySelectorAll("#tools button").forEach(b=>{
+  b.onclick=()=>{ tool=b.dataset.tool;
+    document.querySelectorAll("#tools button").forEach(x=>x.classList.toggle("on",x===b)); };
+});
+$("preset").onchange=e=>{
+  const v=e.target.value;
+  if(v==="custom") return;
+  const [w,h]=v.split("x").map(Number);
+  $("cw").value=w; $("ch").value=h; doResize();
+};
+function doResize(){
+  const w=Math.max(1,Math.min(320,+$("cw").value||1));
+  const h=Math.max(1,Math.min(200,+$("ch").value||1));
+  const ng=make(w,h);
+  for(let y=0;y<Math.min(h,rows);y++) for(let x=0;x<Math.min(w,cols);x++) ng[y][x]=grid[y][x];
+  cols=w; rows=h; grid=ng; fitZoom(); resizeCanvas(); refreshOut();
+}
+$("resize").onclick=doResize;
+$("clear").onclick=()=>{ pushUndo(); grid=make(cols,rows); redraw(); refreshOut(); };
+$("zoomIn").onclick=()=>{ scale=Math.min(40,scale+2); resizeCanvas(); };
+$("zoomOut").onclick=()=>{ scale=Math.max(1,scale-2); resizeCanvas(); };
+$("gridBtn").onclick=e=>{ showGrid=!showGrid; e.target.classList.toggle("on",showGrid); redraw(); };
+$("flipBtn").onclick=e=>{ flipView=!flipView; e.target.classList.toggle("on",flipView); redraw(); };
+$("undo").onclick=undo; $("redo").onclick=redo;
+$("genSpr").onclick=genSprite; $("genScene").onclick=genScene;
+$("copy").onclick=()=>{ $("out").select(); navigator.clipboard?.writeText($("out").value);
+  $("status").textContent="Copied output to clipboard."; };
+$("dlpng").onclick=downloadPNG;
+$("png").onchange=e=>{ if(e.target.files[0]) importPNG(e.target.files[0]); };
+$("stage").addEventListener("dragover",e=>e.preventDefault());
+$("stage").addEventListener("drop",e=>{ e.preventDefault();
+  if(e.dataTransfer.files[0]) importPNG(e.dataTransfer.files[0]); });
+window.addEventListener("keydown",e=>{
+  if(e.ctrlKey||e.metaKey){
+    if(e.key==="z"){ e.preventDefault(); e.shiftKey?redo():undo(); }
+    if(e.key==="y"){ e.preventDefault(); redo(); }
+  } else {
+    const k={b:"pencil",l:"line",r:"rect",f:"fill",e:"erase",i:"pick"}[e.key.toLowerCase()];
+    if(k){ tool=k; document.querySelectorAll("#tools button").forEach(x=>x.classList.toggle("on",x.dataset.tool===k)); }
+  }
+});
+
+/* ---------- boot ---------- */
+buildPalette();
+fitZoom(); resizeCanvas(); genSprite();
+window.addEventListener("resize",()=>{ fitZoom(); resizeCanvas(); });
+</script>
+</body>
+</html>

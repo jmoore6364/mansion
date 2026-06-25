@@ -86,10 +86,15 @@ rates a flawless run.
 
 ## Tech notes
 
-- **Graphics:** the authentic EGA 16-color palette, all scenes drawn from pixel
-  primitives plus a hand-built 5×7 bitmap font. Nearest-neighbor scaling keeps
-  every pixel sharp. A CSS **CRT overlay** adds scanlines, a vignette, and a faint
-  flicker.
+- **Graphics:** the authentic EGA 16-color palette, with **painted PNG room
+  backgrounds** (loaded from `art/`, with a procedural fallback) layered under
+  pixel-primitive scenes and a hand-built 5×7 bitmap font. Nearest-neighbor
+  scaling keeps every pixel sharp. A CSS **CRT overlay** adds scanlines, a
+  vignette, and a faint flicker.
+- **Art tools:** a self-contained EGA pixel editor ships in the repo
+  (**`editor.html`**) — paint tools, the exact 16-color palette, sprite and full
+  320×200 scene modes, PNG import (snapped to EGA), and export straight into the
+  game's sprite format. See [`art/README.md`](art/README.md) for the workflow.
 - **Sound:** `AudioContext` square-wave oscillators emulate the PC speaker —
   beeps, footsteps, pickup jingles, a death dirge, a lullaby, a jaunty-but-spooky
   title theme, plus a **per-room ambient bed** (ticking shop, dripping catacombs,
