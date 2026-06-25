@@ -357,6 +357,34 @@ const Sound = (() => {
     let t = a.currentTime + 0.01;
     for(const [f,d] of seq){ if(f>0) tone(f, d*0.92, t, vol); t += d; }
   }
+  // ---- ambient bed: a sustained hum + per-room periodic accents ----
+  let humOsc=null, humGain=null, ambRoom=null, ambTick=0;
+  function stopHum(){ if(humOsc){ try{humOsc.stop();}catch(e){} humOsc=null; humGain=null; } }
+  function startHum(freq,vol){
+    stopHum(); const a=ensure(); if(!a||muted) return;
+    humOsc=a.createOscillator(); humGain=a.createGain();
+    humOsc.type="square"; humOsc.frequency.value=freq;
+    humGain.gain.value=vol;
+    humOsc.connect(humGain); humGain.connect(a.destination);
+    humOsc.start();
+  }
+  function setRoom(room){
+    ambRoom=room; ambTick=0; stopHum();
+    if(muted||!room) return;
+    if(room==="lab") startHum(58,0.035);
+    else if(room==="catacombs") startHum(46,0.022);
+  }
+  function ambientStep(){
+    if(muted||!ambRoom) return;
+    if(!actx || actx.state==="suspended") return;
+    ambTick++;
+    if(ambRoom==="shop" && ambTick%2===0) tone(1600,0.018,null,0.035);        // clock tick
+    if(ambRoom==="catacombs" && ambTick%5===0) tone(190+(ambTick%3)*28,0.06,null,0.05); // drip
+    if(ambRoom==="crypt" && ambTick%6===0) tone(1046,0.05,null,0.03);          // eerie tone
+    if(ambRoom==="lab" && ambTick%3===0) tone(1245,0.02,null,0.025);           // electric crackle
+    if(ambRoom==="street" && ambTick%4===0) tone(78,0.20,null,0.03);           // low wind
+  }
+  setInterval(ambientStep, 650);
   return {
     beep(){ tone(880,0.05); },
     blip(){ tone(1320,0.03,null,0.07); },
@@ -378,8 +406,9 @@ const Sound = (() => {
       play([[392,Q],[392,E],[440,E],[523,Q],[440,Q],[392,E],[349,E],[392,Q],[0,E],
             [330,Q],[349,E],[392,E],[440,Q],[392,Q],[330,Q],[294,Q],[262,Q+E]], 0.09);
     },
-    toggleMute(){ muted = !muted; return muted; },
-    isMuted(){ return muted; }
+    toggleMute(){ muted = !muted; if(muted) stopHum(); else setRoom(ambRoom); return muted; },
+    isMuted(){ return muted; },
+    setRoom(room){ setRoom(room); }
   };
 })();
 
@@ -433,7 +462,9 @@ const game = {
   score: 0, deaths: 0, awarded: {},
   target: null,   // point-and-click walk target {x,y}
   invOpen: false, // inventory panel visible
-  tapFx: null     // transient tap highlight {x,y,w,h,life}
+  tapFx: null,    // transient tap highlight {x,y,w,h,life}
+  follow: null,   // Penelope follower position
+  gargIdx: 0, tauntIdx: 0, tauntT: 0
 };
 function flag(k){ return !!game.flags[k]; }
 function setFlag(k,v){ game.flags[k] = (v===undefined?true:v); }
@@ -536,6 +567,22 @@ const ITEM_DESC = {
   lantern:"A lit brass lantern, burning warm and steady. It banishes the dark.",
   gloves: "Thick rubber gloves. Insulating - the sort of thing one wears around live wires."
 };
+
+/* ---- NPC dialogue + villain taunts ---- */
+const GARGOYLE_LINES = [
+  "The stone gargoyle's eyes swivel to you. 'Ssso. Another warm thing comes creeping into my dark.'",
+  "'The dead keep their tolls, morsel. SILVER pays the ferryman's GATE - nothing less.'",
+  "'Your sweetheart sleeps in glass beyond the bars. Only her own LULLABY will wake her.'",
+  "'And mind the doctor's machine. Bare hands on live iron? He learned THAT lesson... twice.'",
+  "The gargoyle settles back into stone. 'I have said my piece. Begone, and do try to scream prettily.'"
+];
+const HAMMER_TAUNTS = [
+  "MWAHAHA! You'll never reach my lever, boy!",
+  "That girl will make a SPLENDID automaton!",
+  "Go on - TOUCH the lever. I DARE you!",
+  "Fresh parts! I've needed fresh parts for AGES!",
+  "Run, run - it only makes the current sweeter!"
+];
 
 /* =========================================================
    ROOMS
@@ -733,6 +780,7 @@ const rooms = {
     walk:{x:8,y:150,w:304,h:38}, enterX:30, enterY:158,
     hotspots:[
       {x:6,y:96,w:34,h:64,   cmd:"go up"},
+      {x:46,y:88,w:40,h:32,  cmd:"talk gargoyle"},
       {x:120,y:118,w:70,h:42,cmd:()=> (flag("sarc_looked")&&!flag("coin_taken"))?"get coin":"look sarcophagus"},
       {x:264,y:80,w:48,h:80, cmd:()=> flag("gate_open")?"go east":(hasItem("coin")?"use coin":"look gate")}
     ],
@@ -760,6 +808,11 @@ const rooms = {
       const fl = (Math.sin(performance.now()/120)>0)?12:14;
       rect(96,60,4,16,6); rect(92,52,12,10,fl); rect(95,48,6,6,15);
       rect(220,60,4,16,6); rect(216,52,12,10,fl); rect(219,48,6,6,15);
+      // wall gargoyle (NPC - TALK to it)
+      const ge=(Math.sin(performance.now()/280)>0)?12:4;  // glowing eyes
+      rect(52,96,28,22,8); rect(48,90,8,9,8); rect(76,90,8,9,8);
+      rect(58,102,5,5,ge); rect(70,102,5,5,ge);
+      rect(58,112,16,2,0);
       // sarcophagus
       rect(120,118,70,40,8); rect(120,118,70,40,8);
       rect(122,120,66,36,7);
@@ -802,6 +855,7 @@ const rooms = {
         return say("An iron gate, barred. There's a COIN SLOT set into it. Try: USE COIN.",14);
       }
       if(noun==="slot") return say("A narrow slot in the gate, coin-sized. Try: USE COIN.",14);
+      if(noun==="gargoyle"||noun==="statue"||noun==="grotesque") return say("A leering stone GARGOYLE juts from the wall, its eyes faintly aglow. It looks like it wants to TALK.",13);
       if(noun==="torch"||noun==="torches") return say("Pitch torches throw jumping shadows on the bones.",14);
       if(noun==="stair"||noun==="stairs"||noun==="up") return say("The spiral stair winds back UP to the antique shop.",14);
       return null;
@@ -960,6 +1014,7 @@ function handleCommand(raw){
     use:"use", insert:"use", put:"use", give:"use", pay:"use", oil:"use",
     pull:"use", flip:"use", yank:"use", throw:"use", wear:"use",
     open:"open", unlock:"open",
+    talk:"talk", speak:"talk", ask:"talk", greet:"talk", say:"talk",
     h:"help","?":"help", commands:"help",
     restore:"load", continue:"load",
     n:"north", s:"south", e:"east", w:"west"
@@ -985,6 +1040,8 @@ function handleCommand(raw){
   if(joined.includes("lever")||joined.includes("switch")) noun = "lever";
   if(joined.includes("glove")) noun = "gloves";
   if(joined.includes("hammerstein")||joined.includes("doctor")) noun = "hammerstein";
+  if(joined.includes("gargoyle")||joined.includes("statue")||joined.includes("grotesque")) noun = "gargoyle";
+  if(joined.includes("penelope")||joined.includes("girl")) noun = "penelope";
   // special: verbs that imply their object
   if(rawVerb==="oil"){ verb="use"; noun="oil"; }
   if((rawVerb==="pull"||rawVerb==="flip"||rawVerb==="yank"||rawVerb==="throw") && !noun) noun="lever";
@@ -994,7 +1051,7 @@ function handleCommand(raw){
 
   switch(verb){
     case "help":
-      return say("TAP or CLICK objects to interact, tap the floor to walk. Or type: LOOK, GET, OPEN, USE, WIND, INVENTORY, GO, SAVE, LOAD. Open ITEMS for your inventory.",11);
+      return say("TAP or CLICK objects to interact, tap the floor to walk. Or type: LOOK, GET, OPEN, USE, WIND, TALK, INVENTORY, GO, SAVE, LOAD. Open ITEMS for your inventory.",11);
 
     case "save": {
       const ok = saveGame();
@@ -1141,6 +1198,23 @@ function handleCommand(raw){
       return say("Wind what?",7);
     }
 
+    case "talk": {
+      if(game.room==="catacombs"){
+        if(!hasItem("lantern")) return say("Something chuckles dryly in the dark, but you can't see it. You need a LIGHT.",7);
+        const line = GARGOYLE_LINES[game.gargIdx % GARGOYLE_LINES.length];
+        game.gargIdx++; Sound.blip();
+        return say(line, 11);
+      }
+      if(game.room==="lab" && (noun==="hammerstein"||noun==="doctor"||!noun)){
+        if(flag("defeated")) return say("Dr. Hammerstein only groans, quite defeated.",7);
+        const t = HAMMER_TAUNTS[game.tauntIdx % HAMMER_TAUNTS.length]; game.tauntIdx++;
+        return say("Hammerstein cackles: '"+t+"'", 13);
+      }
+      if(noun==="penelope" && flag("freed"))
+        return say("Penelope grips your hand. 'I knew you'd come, Hugo. Now please - get us OUT of here.'", 13);
+      return say("There's no one here to talk to.", 7);
+    }
+
     case "go":
     case "north": case "south": case "east": case "west": {
       let dir = (verb==="go")? noun : verb;
@@ -1194,7 +1268,7 @@ function travel(id){
   const r = rooms[id]; if(!r) return;
   game.room = id; game.px = r.enterX; game.py = r.enterY; game.walking=false;
   game.target = null; game.invOpen = false;
-  Sound.door(); Haptic.buzz(12);
+  Sound.door(); Sound.setRoom(id); Haptic.buzz(12);
   if(id==="shop") award("shop");
   if(id==="catacombs") award("descend");
   if(id==="lab") award("lab");
@@ -1383,7 +1457,7 @@ function startNew(){
   try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
   game.inv=[]; game.flags={};
   game.score=0; game.deaths=0; game.awarded={};
-  game.follow=null;
+  game.follow=null; game.gargIdx=0; game.tauntIdx=0; game.tauntT=0;
   game.scene="play"; travel("street");
   say("Welcome to YE OLDE ANTIQUES. Your beloved Penelope is somewhere inside...",14);
   Sound.beep();
@@ -1454,6 +1528,15 @@ function update(){
     const dyp = game.py - game.follow.y;
     game.follow.x += dxp*0.12; game.follow.y += dyp*0.12;
   }
+  // Dr. Hammerstein taunts on a timer while you're in the lab (and losing).
+  if(game.room==="lab" && !flag("defeated") && !game.invOpen){
+    game.tauntT++;
+    if(game.tauntT>300 && game.msgTimer<=0){
+      game.tauntT=0;
+      say("Hammerstein: '"+HAMMER_TAUNTS[game.tauntIdx % HAMMER_TAUNTS.length]+"'", 13);
+      game.tauntIdx++;
+    }
+  } else { game.tauntT = 0; }
   if(game.msgTimer>0) game.msgTimer--;
 }
 
@@ -1524,21 +1607,42 @@ function renderPlay(){
 }
 
 function renderTitle(){
-  clear(0);
-  rect(0,0,W,8,4); rect(0,H-8,W,8,4); rect(0,0,8,H,4); rect(W-8,0,8,H,4);
-  dither(0,0,W,8,4,12); dither(0,H-8,W,8,12,4);
+  const t = performance.now();
+  // lightning flash every ~4s briefly lights the sky
+  const flash = (t % 4000) < 110;
+  clear(flash ? 8 : 0);
+  if(flash){ dither(0,0,W,140, 7,8); }   // bright stormy sky
+  // moon
+  rect(248,18,18,18, flash?15:7); rect(252,16,14,14, flash?15:7);
+  // drifting fog band
+  const fog=(t/40)%32;
+  for(let x=-32+((-fog)|0); x<W; x+=32){ rect(x,116,18,3,8); rect(x+8,122,18,2,8); }
+  // spooky house silhouette
   rect(110,70,100,60,8); rect(120,50,80,24,8);
   for(let i=0;i<40;i++){ rect(130-i,72-i,2,2,0); rect(190+i,72-i,2,2,0); }
   rect(150,60,20,70,0);
-  rect(124,80,12,12,14); rect(184,80,12,12,14);
+  // flickering lit windows
+  const wlit = ((t/180|0)%7===0) ? 6 : 14;
+  rect(124,80,12,12,wlit); rect(184,80,12,12,(((t/180|0)+3)%7===0)?6:14);
   rect(150,100,20,30,6);
-  rect(40,90,26,60,6); rect(43,93,20,20,15); rect(48,140,10,8,14);
+  // floating grandfather clock with a swinging pendulum
+  rect(40,90,26,60,6); rect(43,93,20,20,15);
+  const sw = Math.sin(t/420)*5;          // pendulum swing
+  rect((53+sw)|0,128,4,16,0); rect((51+sw)|0,140,8,6,14);
   text("TICK", 36,76, 7);
+  // a bat swooping across
+  const bx = ((t/14) % (W+40)) - 20;
+  const by = 44 + Math.sin(t/260)*10;
+  const flap = ((t/110|0)%2)?2:-2;
+  rect(bx|0, by|0, 4, 3, 0);
+  rect((bx-5)|0, (by+flap)|0, 5, 2, 0); rect((bx+4)|0, (by+flap)|0, 5, 2, 0);
+  // title (pulsing)
+  const pc = ((t/350|0)%2)?12:14;
   textCentered("HUGO IV", 24, 14);
-  textCentered("THE ANTIQUE SHOP", 36, 12);
-  textCentered("OF HORRORS", 46, 12);
+  textCentered("THE ANTIQUE SHOP", 36, pc);
+  textCentered("OF HORRORS", 46, pc);
   textCentered("AN UNOFFICIAL EGA ADVENTURE", 150, 7);
-  if(((performance.now()/500)|0)%2===0)
+  if(((t/500)|0)%2===0)
     textCentered(TOUCH ? "TAP START BELOW" : "PRESS ENTER TO BEGIN", 168, 15);
   if(hasSave()) textCentered(TOUCH ? "OR TAP CONTINUE" : "C = CONTINUE SAVED GAME", 180, 11);
   if(!TOUCH) textCentered("M=SOUND   T=CRT", 190, 8);
@@ -1584,12 +1688,17 @@ function resetGame(){
   game.msg=""; game.msgTimer=0;
   game.score=0; game.deaths=0; game.awarded={};
   game.target=null; game.invOpen=false; game.tapFx=null; game.follow=null;
+  game.gargIdx=0; game.tauntIdx=0; game.tauntT=0;
   _titlePlayed=false; _winPlayed=false;
 }
 
 let _uiScene = null;
 function frame(){
-  if(game.scene !== _uiScene){ _uiScene = game.scene; updateControlsUI(); }
+  if(game.scene !== _uiScene){
+    _uiScene = game.scene;
+    updateControlsUI();
+    Sound.setRoom(game.scene==="play" ? game.room : null);
+  }
   update();
   if(game.scene==="title") renderTitle();
   else if(game.scene==="dead") renderDead();

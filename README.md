@@ -79,8 +79,10 @@ A six-room quest in two acts to rescue Penelope, scored out of **160 points**:
 
 Features the full Hugo experience: a **Sierra-style score** and **death counter**,
 **sudden deaths with a respawn screen**, a **companion who follows you** in Act II,
-a **save/restore system**, autosave on every room change, and a victory ending
-that rates a flawless run.
+a **talking gargoyle NPC** who hints at the puzzles, **villain taunts** during the
+finale, **room-by-room ambient sound**, an **animated title screen**, a
+**save/restore system**, autosave on every room change, and a victory ending that
+rates a flawless run.
 
 ## Tech notes
 
@@ -89,8 +91,9 @@ that rates a flawless run.
   every pixel sharp. A CSS **CRT overlay** adds scanlines, a vignette, and a faint
   flicker.
 - **Sound:** `AudioContext` square-wave oscillators emulate the PC speaker —
-  beeps, footsteps, pickup jingles, a death dirge, a lullaby, and a jaunty-but-
-  spooky title theme.
+  beeps, footsteps, pickup jingles, a death dirge, a lullaby, a jaunty-but-spooky
+  title theme, plus a **per-room ambient bed** (ticking shop, dripping catacombs,
+  a low lab hum and electric crackle, eerie crypt tones, low street wind).
 - **Saves & score:** progress, score, and death count stored in the browser via
   `localStorage`.
 - **Mobile:** auto-detected touch UI — on-screen D-pad, tappable command bar that
