@@ -460,7 +460,8 @@ const Haptic = {
    ========================================================= */
 const SCORES = {
   key:10, shop:5, oil:10, music:10, lantern:10, oil_clock:10,
-  open_clock:10, descend:5, coin:15, gate:15, freed:20
+  open_clock:10, descend:5, coin:15, gate:15, freed:20,
+  lab:5, gloves:10, defeat:25
 };
 const MAX_SCORE = Object.values(SCORES).reduce((a,b)=>a+b,0);
 function award(name){
@@ -524,14 +525,16 @@ const ITEMS = {
   oil:     { name:"an oil can" },
   coin:    { name:"a silver coin" },
   music:   { name:"an antique music box" },
-  lantern: { name:"a lit brass lantern" }
+  lantern: { name:"a lit brass lantern" },
+  gloves:  { name:"a pair of rubber gloves" }
 };
 const ITEM_DESC = {
   key:    "A heavy brass key, worn smooth. It let you into the shop.",
   oil:    "A dented oil can, still half full. Good for stuck, rusted mechanisms.",
   coin:   "A cold tarnished silver coin. About the size of a certain slot...",
   music:  "Penelope's antique music box. Winding it in the right place may matter.",
-  lantern:"A lit brass lantern, burning warm and steady. It banishes the dark."
+  lantern:"A lit brass lantern, burning warm and steady. It banishes the dark.",
+  gloves: "Thick rubber gloves. Insulating - the sort of thing one wears around live wires."
 };
 
 /* =========================================================
@@ -811,7 +814,8 @@ const rooms = {
     walk:{x:40,y:150,w:240,h:38}, enterX:50, enterY:158,
     hotspots:[
       {x:8,y:96,w:30,h:64,   cmd:"go west"},
-      {x:132,y:70,w:56,h:52, cmd:()=> (!flag("freed")&&hasItem("music"))?"wind box":"look penelope"}
+      {x:132,y:70,w:56,h:52, cmd:()=> (!flag("freed")&&hasItem("music"))?"wind box":"look penelope"},
+      {x:282,y:90,w:30,h:70, cmd:()=> flag("lab_open")?"go east":"look around"}
     ],
     draw(){
       rect(0,0,W,160,0); dither(0,0,W,160,1,0);
@@ -819,6 +823,8 @@ const rooms = {
       for(let x=0;x<W;x+=32) rect(x,160,1,40,0);
       // gate back (left)
       rect(8,96,30,64,0); text("WEST",10,118,11);
+      // lab door (right) - opens once Penelope is freed
+      if(flag("lab_open")){ rect(282,90,30,70,0); rect(284,92,26,66,4); text("EAST",284,118,14); }
       // candles
       for(const cx of [70,250]){
         rect(cx,120,4,30,15);
@@ -841,12 +847,91 @@ const rooms = {
       if(flag("freed")) text("PENELOPE IS FREE!", 100, 20, 14);
     },
     look(noun){
-      if(!noun||noun==="around"||noun==="crypt"||noun==="room") return say("A candlelit crypt. On the altar, PENELOPE sleeps inside an enchanted GLASS CASE. The way back is WEST.",13);
+      if(!noun||noun==="around"||noun==="crypt"||noun==="room"){
+        if(flag("lab_open")) return say("The crypt, its glass case shattered. Penelope clings to your arm. A stone door now gapes to the EAST, breathing cold air. The way back is WEST.",13);
+        return say("A candlelit crypt. On the altar, PENELOPE sleeps inside an enchanted GLASS CASE. The way back is WEST.",13);
+      }
       if(noun==="penelope"||noun==="girl"||noun==="case"||noun==="glass"||noun==="altar"){
-        if(flag("freed")) return say("Penelope, awake and beaming at you. 'Hugo! You came!'",14);
+        if(flag("freed")) return say("Penelope, awake and clutching your sleeve. 'Hugo - that door wasn't there before. I'm scared.'",14);
         return say("Penelope sleeps under a curse, sealed in glass. No lock, no latch... only silence. If only you could play her lullaby.",13);
       }
+      if(noun==="door"||noun==="east"){
+        if(flag("lab_open")) return say("A grinding stone door to the EAST, opened by the lullaby. Something hums beyond it.",14);
+        return say("The crypt walls are solid stone... for now.",7);
+      }
       if(noun==="candle"||noun==="candles") return say("Black candles burn with a cold blue flame.",11);
+      return null;
+    }
+  },
+
+  /* ---------------- HAMMERSTEIN'S LABORATORY (Act II finale) ---------------- */
+  lab: {
+    name:"Hammerstein's Laboratory",
+    walk:{x:8,y:150,w:230,h:38}, enterX:24, enterY:158,
+    hotspots:[
+      {x:6,y:96,w:30,h:64,   cmd:"go west"},
+      {x:40,y:120,w:44,h:24, cmd:()=> flag("gloves_taken")?"look bench":"get gloves"},
+      {x:150,y:84,w:30,h:76, cmd:()=> flag("defeated")?"look lever":"pull lever"},
+      {x:250,y:60,w:60,h:100,cmd:"look hammerstein"}
+    ],
+    draw(){
+      rect(0,0,W,160,0); dither(0,0,W,160,1,0);
+      rect(0,160,W,40,8); rect(0,160,W,2,0);
+      for(let x=0;x<W;x+=28) rect(x,160,1,40,0);
+      // door back (left)
+      rect(6,96,30,64,0); text("WEST",8,118,11);
+      // workbench with rubber gloves
+      rect(40,128,46,30,6); rect(40,128,46,3,14);
+      if(!flag("gloves_taken")){ rect(54,120,8,10,9); rect(64,120,8,10,9); }
+      // the great machine + power lever (center)
+      rect(120,40,70,80,8); rect(124,44,62,40,1);
+      // sparking coil
+      if(!flag("defeated")){
+        const s=(Math.sin(performance.now()/90)>0);
+        rect(150,28,10,14,7); rect(153,18,4,12, s?11:9);
+        if(s){ line(155,18,148,6,11); line(155,18,164,8,11); }
+      } else { rect(150,28,10,14,8); }
+      // dials
+      rect(128,90,12,12, flag("defeated")?8:10); rect(150,90,12,12, flag("defeated")?8:12);
+      // big lever
+      rect(150,84,30,40,0);
+      rect(162,88,6,30,7);
+      rect(160,(flag("defeated")?112:86),10,8,4); // handle up=armed, down=thrown
+      // Dr. Hammerstein (right)
+      if(!flag("defeated")){
+        rect(258,60,28,54,15);            // lab coat
+        rect(262,46,20,16,14);            // face
+        rect(266,50,3,3,0); rect(276,50,3,3,0);
+        rect(258,40,28,8,7); rect(254,42,8,6,7); rect(286,42,8,6,7); // wild hair
+        rect(262,114,8,20,8); rect(278,114,8,20,8); // legs
+        text("MWAHAHA!", 244, 30, 12);
+      } else {
+        rect(252,150,44,8,8); text("DEFEATED", 250, 140, 8); // crumpled
+      }
+      text("HAMMERSTEIN'S LABORATORY", 70, 8, 12);
+    },
+    look(noun){
+      if(!noun||noun==="around"||noun==="lab"||noun==="laboratory"||noun==="room"){
+        if(flag("defeated")) return say("The lab, silent now. Dr. Hammerstein lies in a heap by his dead machine. The way out is WEST.",10);
+        return say("A crackling laboratory. DR. HAMMERSTEIN cackles by a humming MACHINE with a great power LEVER. A WORKBENCH sits to the left. WEST leads back.",12);
+      }
+      if(noun==="hammerstein"||noun==="doctor"||noun==="villain"||noun==="man"){
+        if(flag("defeated")) return say("The mad doctor, crumpled and powerless. He won't be reanimating anyone tonight.",10);
+        return say("Dr. Hammerstein - the man from the portrait! Cables run from his machine into his very spine. 'You'll make a fine EXHIBIT, boy!'",12);
+      }
+      if(noun==="lever"||noun==="switch"){
+        if(flag("defeated")) return say("The power lever, thrown. The machine is dead.",10);
+        return say("A great iron POWER LEVER, humming with current. Throwing it would kill the machine - but it's sheathed in sparks. Bare hands would be... fatal.",14);
+      }
+      if(noun==="bench"||noun==="workbench"){
+        return say(flag("gloves_taken")?"A cluttered workbench, now missing its gloves.":"A workbench strewn with tools - and a pair of rubber GLOVES.",14);
+      }
+      if(noun==="gloves"||noun==="glove"){
+        if(hasItem("gloves")) return say("Your rubber gloves. Insulation against a nasty shock.",14);
+        if(flag("gloves_taken")) return say("You already took the gloves.",7);
+        return say("A pair of thick rubber GLOVES on the bench. Try: GET GLOVES.",14);
+      }
+      if(noun==="machine"||noun==="coil"||noun==="console") return say(flag("defeated")?"A dead tangle of wire and glass.":"A towering machine of coils and dials, pouring current into the doctor.",12);
       return null;
     }
   }
@@ -873,6 +958,7 @@ function handleCommand(raw){
     i:"inventory", inv:"inventory", items:"inventory",
     walk:"go", move:"go", enter:"go",
     use:"use", insert:"use", put:"use", give:"use", pay:"use", oil:"use",
+    pull:"use", flip:"use", yank:"use", throw:"use", wear:"use",
     open:"open", unlock:"open",
     h:"help","?":"help", commands:"help",
     restore:"load", continue:"load",
@@ -896,8 +982,13 @@ function handleCommand(raw){
   if(joined.includes("gate")||joined.includes("slot")||joined.includes("bars")) noun = "gate";
   if(joined.includes("crate")) noun = "crate";
   if(joined.includes("lantern")) noun = "lantern";
-  // special: "oil" used as a verb (oil the clock)
+  if(joined.includes("lever")||joined.includes("switch")) noun = "lever";
+  if(joined.includes("glove")) noun = "gloves";
+  if(joined.includes("hammerstein")||joined.includes("doctor")) noun = "hammerstein";
+  // special: verbs that imply their object
   if(rawVerb==="oil"){ verb="use"; noun="oil"; }
+  if((rawVerb==="pull"||rawVerb==="flip"||rawVerb==="yank"||rawVerb==="throw") && !noun) noun="lever";
+  if(rawVerb==="wear" && !noun) noun="gloves";
 
   Sound.blip();
 
@@ -945,6 +1036,11 @@ function handleCommand(raw){
         if(flag("lantern_taken")) return say("You already have the lantern.",7);
         setFlag("lantern_taken"); giveItem("lantern"); Sound.pickup(); Haptic.buzz(20); award("lantern");
         return say("You take the lit brass LANTERN. Its warm glow pushes back the shadows.",10);
+      }
+      if(game.room==="lab" && noun==="gloves"){
+        if(flag("gloves_taken")) return say("You already have the gloves.",7);
+        setFlag("gloves_taken"); giveItem("gloves"); Sound.pickup(); Haptic.buzz(20); award("gloves");
+        return say("You grab the thick rubber GLOVES off the bench. They might save your life.",10);
       }
       if(game.room==="catacombs" && noun==="coin"){
         if(!hasItem("lantern")) return say("It's too dark to find anything. You need a LIGHT.",7);
@@ -1012,6 +1108,20 @@ function handleCommand(raw){
         }
         return say("There's nowhere to use the coin here.",7);
       }
+      if(noun==="gloves"){
+        if(!hasItem("gloves")) return say("You don't have any gloves.",7);
+        return say("You snug the rubber gloves on. Now your hands are insulated - time to deal with that LEVER.",11);
+      }
+      if(noun==="lever"||noun==="switch"){
+        if(game.room!=="lab") return say("There's no lever here.",7);
+        if(flag("defeated")) return say("The lever is already thrown. The machine is dead.",10);
+        if(!hasItem("gloves")){
+          return die("You seize the sparking lever bare-handed. A blinding arc of current roars through you - and Hugo is, quite literally, fried. (You'll want something INSULATING first.)");
+        }
+        setFlag("defeated"); award("defeat"); Sound.sting();
+        setTimeout(()=>{ game.scene="win"; }, 2800);
+        return say("Gloved hands gripping the lever, you HEAVE. The machine screams, throws sparks, and dies - and Dr. Hammerstein crumples with it. You did it!",14);
+      }
       return say("Nothing happens.",7);
     }
 
@@ -1019,11 +1129,11 @@ function handleCommand(raw){
       if(noun==="music"||noun==="box"||noun==="crank"){
         if(!hasItem("music")) return say("You don't have the music box.",7);
         if(game.room==="crypt" && !flag("freed")){
-          setFlag("freed"); Sound.lullaby(); award("freed");
-          setTimeout(()=>{ game.scene="win"; }, 2600);
-          return say("You wind the music box. Penelope's lullaby drifts through the crypt. The glass clouds, then shatters - she stirs, and wakes!",14);
+          setFlag("freed"); setFlag("lab_open"); Sound.lullaby(); award("freed");
+          game.follow = {x:game.px - game.facing*13, y:game.py};
+          return say("You wind the music box. Penelope's lullaby fills the crypt - the glass shatters and she wakes! But the tune stirs something deeper: a stone door grinds open to the EAST...",14);
         }
-        if(flag("freed")) return say("The music box plays softly. Penelope hums along.",13);
+        if(flag("freed")) return say("The music box plays softly. Penelope hums along, keeping close.",13);
         Sound.lullaby(); setFlag("music_wound");
         return say("The music box tinkles a sad, familiar lullaby - Penelope used to hum it. Somewhere, the tune feels... important.",13);
       }
@@ -1060,6 +1170,13 @@ function handleCommand(raw){
       }
       if(game.room==="crypt"){
         if(["west","left","out","gate","catacombs"].includes(dir)){ travel("catacombs"); return; }
+        if(["east","right","door","lab","laboratory"].includes(dir)){
+          if(flag("lab_open")){ travel("lab"); return; }
+          return say("There's only solid stone to the east.",7);
+        }
+      }
+      if(game.room==="lab"){
+        if(["west","left","out","back","crypt"].includes(dir)){ travel("crypt"); return; }
       }
       return say("You can't go that way.",7);
     }
@@ -1080,6 +1197,7 @@ function travel(id){
   Sound.door(); Haptic.buzz(12);
   if(id==="shop") award("shop");
   if(id==="catacombs") award("descend");
+  if(id==="lab") award("lab");
   say("You enter: "+r.name+".",11);
   saveGame(); // autosave on room change
 }
@@ -1265,6 +1383,7 @@ function startNew(){
   try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
   game.inv=[]; game.flags={};
   game.score=0; game.deaths=0; game.awarded={};
+  game.follow=null;
   game.scene="play"; travel("street");
   say("Welcome to YE OLDE ANTIQUES. Your beloved Penelope is somewhere inside...",14);
   Sound.beep();
@@ -1315,6 +1434,9 @@ function update(){
     else if(flag("gate_open") && game.px >= wb.x+wb.w-12){ travel("crypt"); }
   } else if(game.room==="crypt"){
     if(game.px <= wb.x+1){ travel("catacombs"); }
+    else if(flag("lab_open") && game.px >= wb.x+wb.w-12){ travel("lab"); }
+  } else if(game.room==="lab"){
+    if(game.px <= wb.x+1){ travel("crypt"); }
   }
   if(moving){
     if(game.room==="street" && flag("door_open") && game.px>146 && game.px<188 && keys.ArrowUp){ travel("shop"); }
@@ -1325,6 +1447,13 @@ function update(){
     stepTimer++;
     if(stepTimer%8===0){ game.walkPhase ^=1; Sound.footstep(); }
   } else game.walkPhase=0;
+  // Penelope follows once freed (in the crypt and the lab).
+  if(flag("freed") && (game.room==="crypt"||game.room==="lab")){
+    if(!game.follow) game.follow = {x:game.px-game.facing*13, y:game.py};
+    const dxp = (game.px - game.facing*13) - game.follow.x;
+    const dyp = game.py - game.follow.y;
+    game.follow.x += dxp*0.12; game.follow.y += dyp*0.12;
+  }
   if(game.msgTimer>0) game.msgTimer--;
 }
 
@@ -1382,6 +1511,10 @@ function drawTapFx(){
 function renderPlay(){
   const room = rooms[game.room];
   room.draw();
+  // Penelope follows once freed
+  if(flag("freed") && game.follow && (game.room==="crypt"||game.room==="lab")){
+    drawSprite(PEN, game.follow.x|0, game.follow.y|0, game.facing<0);
+  }
   const frame = (game.walking && game.walkPhase) ? HUGO_B : HUGO_A;
   drawSprite(frame, game.px|0, game.py|0, game.facing<0);
   drawTapFx();
@@ -1433,7 +1566,7 @@ function renderWin(){
   // little hearts
   for(const hx of [150,156]) { rect(hx,52,4,3,12); rect(hx+1,55,2,2,12); }
   textCentered("THE CURSE IS BROKEN", 30, 14);
-  const body = "Hugo carries Penelope up from the dark, the cursed clock forever silent behind them. The antiques can keep their secrets. Home, and tea, await.";
+  const body = "With Hammerstein's machine in ruins, Hugo and Penelope flee the laboratory and climb back into the moonlight. The antique shop can keep its dreadful secrets. Home, and tea, await.";
   const lines = wrap(body, 44); let y=86;
   for(const ln of lines){ textCentered(ln,y,11); y+=10; }
   const perfect = (game.score>=MAX_SCORE && game.deaths===0);
@@ -1450,6 +1583,7 @@ function resetGame(){
   game.px=150; game.py=150; game.facing=1;
   game.msg=""; game.msgTimer=0;
   game.score=0; game.deaths=0; game.awarded={};
+  game.target=null; game.invOpen=false; game.tapFx=null; game.follow=null;
   _titlePlayed=false; _winPlayed=false;
 }
 

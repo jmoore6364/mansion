@@ -58,7 +58,7 @@ travel between rooms.
 
 ## The adventure
 
-A five-room quest to rescue Penelope, scored out of **120 points**:
+A six-room quest in two acts to rescue Penelope, scored out of **160 points**:
 
 1. **Cobblestone Street** — find the brass key hidden under the welcome mat,
    unlock the shop door.
@@ -70,13 +70,17 @@ A five-room quest to rescue Penelope, scored out of **120 points**:
 4. **The Catacombs** — by lantern-light, lift the silver coin from the
    sarcophagus lid (don't open it!), feed it to the barred gate's coin slot, and
    head east.
-5. **The Forgotten Crypt** — wind Penelope's lullaby on the music box to break
-   the curse and free her. **The End.**
+5. **The Forgotten Crypt** — wind Penelope's lullaby on the music box to free
+   her... which awakens **Dr. Hammerstein** and grinds open a door to the east.
+6. **Hammerstein's Laboratory** (Act II finale) — Penelope now follows you. Grab
+   the rubber **gloves** from the workbench, then throw the machine's power lever
+   to defeat the doctor and escape. *(Pulling it bare-handed is a shocking
+   mistake.)* **The End.**
 
-Features the full Hugo experience: a **Sierra-style score** (points awarded for
-each puzzle solved, shown top-left) and **death counter**, **sudden deaths with a
-respawn screen**, a **save/restore system**, autosave on every room change, and a
-victory ending that rates a flawless run.
+Features the full Hugo experience: a **Sierra-style score** and **death counter**,
+**sudden deaths with a respawn screen**, a **companion who follows you** in Act II,
+a **save/restore system**, autosave on every room change, and a victory ending
+that rates a flawless run.
 
 ## Tech notes
 
