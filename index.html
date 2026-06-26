@@ -421,88 +421,143 @@ const Sound = (() => {
 /* =========================================================
    SPRITES (hex pixel maps); '.' = transparent
    ========================================================= */
-// Hero/heroine sprites: 12x24, hex-per-pixel (see tools/bake_sprites.js).
-// Drawn with drawHexSprite. SW/SH are the shared footprint used by movement,
+// Hero/heroine + NPC sprites: hex-per-pixel (see tools/bake_sprites.js).
+// Drawn with drawHexSprite. SW/SH are the player footprint used by movement,
 // edge-travel and the walk-target marker.
-const SW = 12, SH = 24;
+const SW = 14, SH = 25;
 const HUGO_A = [
-  "............",
-  "...666666...",
-  "..66666666..",
-  "..6CCCCCC6..",
-  "..6CCCCCC6..",
-  "..6C0CC0C6..",
-  "..6CCCCCC6..",
-  "..6CC44CC6..",
-  "...CCCCCC...",
-  "...777777...",
-  "..77744777..",
-  ".C77744777C.",
-  ".C77744777C.",
-  ".C77744777C.",
-  "..77744777..",
-  "..77777777..",
-  "..11111111..",
-  "..11111111..",
-  "..111..111..",
-  "..111..111..",
-  "..111..111..",
-  "..111..111..",
-  "..000..000..",
-  ".0000..0000."
+  "....666666....",
+  "...66666666...",
+  "..6666666666..",
+  "..66CCCCCC66..",
+  "..6CCCCCCCC6..",
+  "..6CC0CC0CC6..",
+  "..6CCCCCCCC6..",
+  "..6CCC66CCC6..",
+  "..6CCC44CCC6..",
+  "...CCCCCCCC...",
+  "...FFFFFFFF...",
+  ".F7777447777F.",
+  ".C7777447777C.",
+  ".C7777447777C.",
+  ".C7777447777C.",
+  "..7777447777..",
+  "..7777777777..",
+  "..8888888888..",
+  "..1111111111..",
+  "..1111..1111..",
+  "..1111..1111..",
+  "..1111..1111..",
+  "..1111..1111..",
+  "..0000..0000..",
+  ".00000..00000."
 ];
 const HUGO_B = [
-  "............",
-  "...666666...",
-  "..66666666..",
-  "..6CCCCCC6..",
-  "..6CCCCCC6..",
-  "..6C0CC0C6..",
-  "..6CCCCCC6..",
-  "..6CC44CC6..",
-  "...CCCCCC...",
-  "...777777...",
-  "..77744777..",
-  ".C77744777C.",
-  ".C77744777C.",
-  ".C77744777C.",
-  "..77744777..",
-  "..77777777..",
-  "..11111111..",
-  "..11111111..",
-  "...111111...",
-  "...11..11...",
-  "...11..11...",
-  "...11..11...",
-  "...00..00...",
-  "..000..000.."
+  "....666666....",
+  "...66666666...",
+  "..6666666666..",
+  "..66CCCCCC66..",
+  "..6CCCCCCCC6..",
+  "..6CC0CC0CC6..",
+  "..6CCCCCCCC6..",
+  "..6CCC66CCC6..",
+  "..6CCC44CCC6..",
+  "...CCCCCCCC...",
+  "...FFFFFFFF...",
+  ".F7777447777F.",
+  ".C7777447777C.",
+  ".C7777447777C.",
+  ".C7777447777C.",
+  "..7777447777..",
+  "..7777777777..",
+  "..8888888888..",
+  "..1111111111..",
+  "...11111111...",
+  "...111..111...",
+  "...111..111...",
+  "...111..111...",
+  "...000..000...",
+  "..0000..0000.."
 ];
-// Penelope: blonde hair, magenta dress
 const PEN = [
-  "............",
-  "...EEEEEE...",
-  "..EEEEEEEE..",
-  ".EECCCCCCEE.",
-  ".EECCCCCCEE.",
-  "..EC0CC0CE..",
-  "..ECCCCCCE..",
-  "..ECC44CCE..",
-  "...CCCCCC...",
-  "...DDDDDD...",
-  "..DDDDDDDD..",
-  ".CDDDDDDDDC.",
-  ".CDDDDDDDDC.",
-  "..DDDDDDDD..",
-  "..DDD55DDD..",
-  ".DDDD55DDDD.",
-  ".DDDDDDDDDD.",
-  ".DDDDDDDDDD.",
-  ".DDDDDDDDDD.",
-  "..DDDDDDDD..",
-  "..DDD..DDD..",
-  "...D....D...",
-  "...0....0...",
-  "..00....00.."
+  "....EEEEEE....",
+  "...EEEEEEEE...",
+  "..EEEEEEEEEE..",
+  ".EEECCCCCCEEE.",
+  ".EECCCCCCCCEE.",
+  ".EECC0CC0CCEE.",
+  "..ECCCCCCCCE..",
+  "..ECCC44CCCE..",
+  "...CCCCCCCC...",
+  "...DDDDDDDD...",
+  "..DDDDDDDDDD..",
+  ".CDDDDDDDDDDC.",
+  ".CDDDDDDDDDDC.",
+  "..DDDDDDDDDD..",
+  "..DDD5555DDD..",
+  ".DDDDDDDDDDDD.",
+  ".DDDDDDDDDDDD.",
+  "DDDDDDDDDDDDDD",
+  ".DDDDDDDDDDDD.",
+  "..DDDDDDDDDD..",
+  "..DDD....DDD..",
+  "...DD....DD...",
+  "...00....00...",
+  "..000....000.."
+];
+const HAMMER = [
+  "..7..7..7..7....",
+  "7.7777777777.7..",
+  ".7777777777777..",
+  ".777CCCCCCCC77..",
+  ".77CCCCCCCCCC7..",
+  ".7C00CCCC00CC7..",
+  ".7CCCCCCCCCCC7..",
+  ".7CCCC66CCCCC7..",
+  ".7CCCC4444CC7...",
+  "..CCCCCCCCCCC...",
+  "..C777777777C...",
+  "C.FFFF444FFFF.C.",
+  "CFFFFF444FFFFFC.",
+  "FFFFFF444FFFFFF.",
+  ".FFFFFFFFFFFF...",
+  ".FFFFFFFFFFFF...",
+  ".FFFFF77FFFFF...",
+  ".FFFFF77FFFFF...",
+  ".FFFFF77FFFFF...",
+  ".FFFFF..FFFFF...",
+  ".FFFF....FFFF...",
+  "..888....888....",
+  "..888....888....",
+  "..888....888....",
+  "..000....000....",
+  ".0000....0000..."
+];
+const GHOST = [
+  "...FFFFFF...",
+  "..FFFFFFFF..",
+  ".FFFFFFFFFF.",
+  ".FFFFFFFFFF.",
+  ".FF00FF00FF.",
+  ".FF00FF00FF.",
+  ".FFFFFFFFFF.",
+  ".FFFF00FFFF.",
+  ".FFFFFFFFFF.",
+  ".FFFFFFFFFF.",
+  ".FFFFFFFFFF.",
+  ".FFFFFFFFFF.",
+  ".FF.FF.FF.F.",
+  ".F..F..F..F."
+];
+const RATSPR = [
+  "..C........C....",
+  ".C8C......C8C...",
+  ".7887....7887C..",
+  ".888888888880CC.",
+  "7888888888888CCC",
+  "78888888888887..",
+  "..77..77..77....",
+  "..00..00..00...."
 ];
 // Sprites use a hex-per-pixel format (see editor.html / tools/bake_sprites.js):
 // each char is an EGA index 0-9/A-F and '.' is transparent.
@@ -551,7 +606,8 @@ const game = {
   invOpen: false, // inventory panel visible
   tapFx: null,    // transient tap highlight {x,y,w,h,life}
   follow: null,   // Penelope follower position
-  gargIdx: 0, tauntIdx: 0, tauntT: 0
+  gargIdx: 0, tauntIdx: 0, tauntT: 0,
+  rat: null, ghost: null
 };
 function flag(k){ return !!game.flags[k]; }
 function setFlag(k,v){ game.flags[k] = (v===undefined?true:v); }
@@ -991,6 +1047,7 @@ const rooms = {
       if(noun==="slot") return say("A narrow slot in the gate, coin-sized. Try: USE COIN.",14);
       if(noun==="gargoyle"||noun==="statue"||noun==="grotesque") return say("A leering stone GARGOYLE juts from the wall, its eyes faintly aglow. It looks like it wants to TALK.",13);
       if(noun==="torch"||noun==="torches") return say("Pitch torches throw jumping shadows on the bones.",14);
+      if(noun==="rat"||noun==="rodent"||noun==="mouse") return say("A fat grave-rat skitters along the wall. It eyes you, unimpressed.",7);
       if(noun==="stair"||noun==="stairs"||noun==="up") return say("The spiral stair winds back UP to the antique shop.",14);
       return null;
     }
@@ -1012,7 +1069,7 @@ const rooms = {
       for(const cx of [70,250]){ const f=(Math.sin(performance.now()/100+cx)>0)?14:12; rect(cx-1,112,6,8,f); }
       rect(134,72,52,48, flag("freed")?0:3);
       if(flag("freed")){ rect(132,70,56,52,0); text("PENELOPE IS FREE!", 100, 20, 14); }
-      else { drawHexSprite(PEN, 148, 76, false); text("Z", 176,72,15); }
+      else { drawHexSprite(PEN, 153, 78, false); text("Z", 177,74,15); }
     },
     draw(){
       rect(0,0,W,160,0); dither(0,0,W,160,1,0);
@@ -1057,6 +1114,10 @@ const rooms = {
         return say("The crypt walls are solid stone... for now.",7);
       }
       if(noun==="candle"||noun==="candles") return say("Black candles burn with a cold blue flame.",11);
+      if(noun==="ghost"||noun==="spirit"||noun==="phantom"){
+        if(flag("freed")) return say("The guardian spirit faded the moment Penelope woke.",7);
+        return say("A pale spirit drifts above the altar, guarding the case. DON'T let it touch you - time your moves.",13);
+      }
       return null;
     }
   },
@@ -1083,12 +1144,9 @@ const rooms = {
       rect(128,90,12,12, flag("defeated")?8:10); rect(150,90,12,12, flag("defeated")?8:12);
       rect(160,(flag("defeated")?112:86),10,8,4);
       if(!flag("defeated")){
-        rect(258,60,28,54,15); rect(262,46,20,16,14);
-        rect(266,50,3,3,0); rect(276,50,3,3,0);
-        rect(258,40,28,8,7); rect(254,42,8,6,7); rect(286,42,8,6,7);
-        rect(262,114,8,20,8); rect(278,114,8,20,8);
-        text("MWAHAHA!", 244, 30, 12);
-      } else { rect(252,150,44,8,8); text("DEFEATED", 250, 140, 8); }
+        drawHexSprite(HAMMER, 256, 126, true);     // the doctor himself, facing Hugo
+        text("MWAHAHA!", 248, 112, 12);
+      } else { rect(250,146,46,8,8); text("DEFEATED", 250, 136, 8); }
     },
     draw(){
       rect(0,0,W,160,0); dither(0,0,W,160,1,0);
@@ -1203,6 +1261,8 @@ function handleCommand(raw){
   if(joined.includes("glove")) noun = "gloves";
   if(joined.includes("hammerstein")||joined.includes("doctor")) noun = "hammerstein";
   if(joined.includes("gargoyle")||joined.includes("statue")||joined.includes("grotesque")) noun = "gargoyle";
+  if(joined.includes("rat")||joined.includes("rodent")) noun = "rat";
+  if(joined.includes("ghost")||joined.includes("spirit")||joined.includes("phantom")) noun = "ghost";
   if(joined.includes("penelope")||joined.includes("girl")) noun = "penelope";
   // special: verbs that imply their object
   if(rawVerb==="oil"){ verb="use"; noun="oil"; }
@@ -1619,7 +1679,7 @@ function startNew(){
   try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
   game.inv=[]; game.flags={};
   game.score=0; game.deaths=0; game.awarded={};
-  game.follow=null; game.gargIdx=0; game.tauntIdx=0; game.tauntT=0;
+  game.follow=null; game.gargIdx=0; game.tauntIdx=0; game.tauntT=0; game.rat=null; game.ghost=null;
   game.scene="play"; travel("street");
   say("Welcome to YE OLDE ANTIQUES. Your beloved Penelope is somewhere inside...",14);
   Sound.beep();
@@ -1699,6 +1759,26 @@ function update(){
       game.tauntIdx++;
     }
   } else { game.tauntT = 0; }
+
+  // Roaming creatures. The rat is harmless catacombs atmosphere; the ghost
+  // guards Penelope in the crypt and is lethal on touch (until she's freed).
+  if(game.room==="catacombs" && hasItem("lantern")){
+    if(!game.rat) game.rat = {x:60, dir:1};
+    game.rat.x += game.rat.dir*1.4;
+    if(game.rat.x<18 || game.rat.x>286) game.rat.dir*=-1;
+  } else game.rat = null;
+  if(game.room==="crypt" && !flag("freed")){
+    if(!game.ghost) game.ghost = {x:212, y:96, dir:-1};
+    game.ghost.x += game.ghost.dir*0.85;
+    if(game.ghost.x<40 || game.ghost.x>252) game.ghost.dir*=-1;
+    game.ghost.y = 96 + Math.sin(performance.now()/450)*24;   // swoops up and down
+    // AABB collision with Hugo
+    const gx=game.ghost.x, gy=game.ghost.y;
+    if(gx+11 > game.px+2 && gx+1 < game.px+SW-2 && gy+14 > game.py+2 && gy+2 < game.py+SH-2){
+      die("The ghost's icy grip closes around your heart. You go cold...");
+    }
+  } else game.ghost = null;
+
   if(game.msgTimer>0) game.msgTimer--;
 }
 
@@ -1761,6 +1841,9 @@ function renderPlay(){
   if(room.bg && (!room.bgWhen || room.bgWhen()) && blitBg(room.bg)){
     if(room.over) room.over();
   } else room.draw();
+  // roaming creatures (drawn under Hugo)
+  if(game.room==="catacombs" && game.rat) drawHexSprite(RATSPR, game.rat.x|0, 149, game.rat.dir<0);
+  if(game.room==="crypt" && game.ghost) drawHexSprite(GHOST, game.ghost.x|0, game.ghost.y|0, game.ghost.dir<0);
   // Penelope follows once freed
   if(flag("freed") && game.follow && (game.room==="crypt"||game.room==="lab")){
     drawHexSprite(PEN, game.follow.x|0, game.follow.y|0, game.facing<0);
@@ -1855,7 +1938,7 @@ function resetGame(){
   game.msg=""; game.msgTimer=0;
   game.score=0; game.deaths=0; game.awarded={};
   game.target=null; game.invOpen=false; game.tapFx=null; game.follow=null;
-  game.gargIdx=0; game.tauntIdx=0; game.tauntT=0;
+  game.gargIdx=0; game.tauntIdx=0; game.tauntT=0; game.rat=null; game.ghost=null;
   _titlePlayed=false; _winPlayed=false;
 }
 
