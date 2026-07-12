@@ -20,29 +20,68 @@ function emit(name, hex){ console.log(`const ${name} = [\n`+hex.map(r=>'  "'+r+'
 /* legend: H hair  S skin  e eye  m mouth  n nose
    T shirt t tie c collar  D dress d dress-shade  b belt  P pants O shoe  h hand
    C coat  g glasses  G ghost  E ear  B body  W tail  */
-const HUGO = { H:6, S:12, e:0, m:4, n:6, T:7, t:4, c:15, b:8, P:1, O:0, h:12 };
+/* Hugo: black-outlined (k) to match the painted rooms; white shirt with gray
+   shading (s), red tie, brown hair with a dark part (d), blue pants with a
+   highlight seam (p). */
+const HUGO = { k:0, H:6, d:8, S:12, e:0, m:4, T:15, s:7, t:4, b:8, P:1, p:9, O:0 };
 const PEN  = { H:14, S:12, e:0, m:4, D:13, d:5, P:13, O:0, h:12 };
 const SCI  = { H:7, S:12, e:0, m:4, n:6, C:15, c:7, t:4, g:0, P:8, O:0, h:12 };
 const GHO  = { G:15, e:0, m:0 };
 const RAT  = { B:8, b:7, W:12, e:0, E:12, O:0 };
 
 const HUGO_A = build("HUGO_A",[
-  "....HHHHHH....","...HHHHHHHH...","..HHHHHHHHHH..","..HHSSSSSSHH..",
-  "..HSSSSSSSSH..","..HSSeSSeSSH..","..HSSSSSSSSH..","..HSSSnnSSSH..",
-  "..HSSSmmSSSH..","...SSSSSSSS...","...cccccccc...",".cTTTTttTTTTc.",
-  ".hTTTTttTTTTh.",".hTTTTttTTTTh.",".hTTTTttTTTTh.","..TTTTttTTTT..",
-  "..TTTTTTTTTT..","..bbbbbbbbbb..","..PPPPPPPPPP..","..PPPP..PPPP..",
-  "..PPPP..PPPP..","..PPPP..PPPP..","..PPPP..PPPP..","..OOOO..OOOO..",
-  ".OOOOO..OOOOO.",
+  "....kkkkkk....",
+  "...kHHHHHHk...",
+  "..kHHHHHHHHk..",
+  "..kHHdHHHHHk..",
+  "..kHSSSSSSHk..",
+  "..kSSSSSSSSk..",
+  "..kSeSSSSeSk..",
+  "..kSSSSdSSSk..",
+  "..kSSmmmmSSk..",
+  "...kSSSSSSk...",
+  "....kSSSSk....",
+  "...kTTttTTk...",
+  "..kTTTttTTTk..",
+  ".kTkTTttTTkTk.",
+  ".kSkTTttTTkSk.",
+  ".kSkTsttsTkSk.",
+  "..kkTsttsTkk..",
+  "..kTTTTTTTTk..",
+  "..kbbbbbbbbk..",
+  "..kPPPkkPPPk..",
+  "..kPpPkkPpPk..",
+  "..kPpPkkPpPk..",
+  "..kPpPkkPpPk..",
+  "..kOOOkkOOOk..",
+  ".kOOOOkkOOOOk.",
 ], HUGO);
 const HUGO_B = build("HUGO_B",[
-  "....HHHHHH....","...HHHHHHHH...","..HHHHHHHHHH..","..HHSSSSSSHH..",
-  "..HSSSSSSSSH..","..HSSeSSeSSH..","..HSSSSSSSSH..","..HSSSnnSSSH..",
-  "..HSSSmmSSSH..","...SSSSSSSS...","...cccccccc...",".cTTTTttTTTTc.",
-  ".hTTTTttTTTTh.",".hTTTTttTTTTh.",".hTTTTttTTTTh.","..TTTTttTTTT..",
-  "..TTTTTTTTTT..","..bbbbbbbbbb..","..PPPPPPPPPP..","...PPPPPPPP...",
-  "...PPP..PPP...","...PPP..PPP...","...PPP..PPP...","...OOO..OOO...",
-  "..OOOO..OOOO..",
+  "....kkkkkk....",
+  "...kHHHHHHk...",
+  "..kHHHHHHHHk..",
+  "..kHHdHHHHHk..",
+  "..kHSSSSSSHk..",
+  "..kSSSSSSSSk..",
+  "..kSeSSSSeSk..",
+  "..kSSSSdSSSk..",
+  "..kSSmmmmSSk..",
+  "...kSSSSSSk...",
+  "....kSSSSk....",
+  "...kTTttTTk...",
+  "..kTTTttTTTkk.",
+  ".kTkTTttTTTSk.",
+  ".kSkTTttTTkkk.",
+  ".kkkTsttsTk...",
+  "...kTsttsTk...",
+  "..kTTTTTTTTk..",
+  "..kbbbbbbbbk..",
+  "...kPPPPPPk...",
+  "..kPpPkkPpPk..",
+  ".kPpPk..kPpPk.",
+  ".kPpPk..kPpPk.",
+  ".kOOOk..kOOOk.",
+  "kOOOOk..kOOOOk",
 ], HUGO);
 const PEN_S = build("PEN",[
   "....HHHHHH....","...HHHHHHHH...","..HHHHHHHHHH..",".HHHSSSSSSHHH.",
