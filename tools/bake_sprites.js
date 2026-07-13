@@ -24,8 +24,8 @@ function emit(name, hex){ console.log(`const ${name} = [\n`+hex.map(r=>'  "'+r+'
    shading (s), red tie, brown hair with a dark part (d), blue pants with a
    highlight seam (p). */
 const HUGO = { k:0, H:6, d:8, S:12, e:0, m:4, T:15, s:7, t:4, b:8, P:1, p:9, O:0 };
-const PEN  = { H:14, S:12, e:0, m:4, D:13, d:5, P:13, O:0, h:12 };
-const SCI  = { H:7, S:12, e:0, m:4, n:6, C:15, c:7, t:4, g:0, P:8, O:0, h:12 };
+const PEN  = { k:0, H:14, S:12, e:0, m:4, D:13, d:5, O:0 };
+const SCI  = { k:0, H:7, S:12, e:0, m:4, C:15, c:7, t:4, g:0, P:8, O:0 };
 const GHO  = { G:15, e:0, m:0 };
 const RAT  = { B:8, b:7, W:12, e:0, E:12, O:0 };
 
@@ -84,24 +84,58 @@ const HUGO_B = build("HUGO_B",[
   "kOOOOk..kOOOOk",
 ], HUGO);
 const PEN_S = build("PEN",[
-  "....HHHHHH....","...HHHHHHHH...","..HHHHHHHHHH..",".HHHSSSSSSHHH.",
-  ".HHSSSSSSSSHH.",".HHSSeSSeSSHH.","..HSSSSSSSSH..","..HSSSmmSSSH..",
-  "...SSSSSSSS...","...DDDDDDDD...","..DDDDDDDDDD..",".hDDDDDDDDDDh.",
-  ".hDDDDDDDDDDh.","..DDDDDDDDDD..","..DDDddddDDD..",".DDDDDDDDDDDD.",
-  ".DDDDDDDDDDDD.","DDDDDDDDDDDDDD",".DDDDDDDDDDDD.","..DDDDDDDDDD..",
-  "..DDD....DDD..","...DD....DD...","...OO....OO...","..OOO....OOO..",
+  "....kkkkkk....",
+  "...kHHHHHHk...",
+  "..kHHHHHHHHk..",
+  ".kHHHHHHHHHHk.",
+  ".kHHSSSSSSHHk.",
+  ".kHSSSSSSSSHk.",
+  ".kHSeSSSSeSHk.",
+  ".kHSSSSSSSSHk.",
+  ".kHSSSmmSSSHk.",
+  "..kSSSSSSSSk..",
+  "...kDDDDDDk...",
+  "..kDDDDDDDDk..",
+  ".kDkDDDDDDkDk.",
+  ".kSkDDddDDkSk.",
+  "..kkDDddDDkk..",
+  "..kDDDDDDDDk..",
+  ".kDDDDDDDDDDk.",
+  ".kDDDDDDDDDDk.",
+  "kDDDDDDDDDDDDk",
+  "kDDDDDDDDDDDDk",
+  ".kDDDDDDDDDDk.",
+  "..kkkkkkkkkk..",
+  "...kOk..kOk...",
+  "..kOOk..kOOk..",
 ], PEN);
-// Dr. Hammerstein — wild hair, glasses, lab coat, bow tie, arms out
+// Dr. Hammerstein — wild hair, glasses, lab coat, bow tie, outlined
 const HAMMER = build("HAMMER",[
-  "..H..H..H..H....","H.HHHHHHHHHH.H..",".HHHHHHHHHHHHH..",
-  ".HHHSSSSSSSSHH..",".HHSSSSSSSSSSH..",".HSggSSSSggSSH..",
-  ".HSSSSSSSSSSSH..",".HSSSSnnSSSSSH..",".HSSSSmmmmSSH..",
-  "..SSSSSSSSSSS...","..ScccccccccS...","h.CCCCtttCCCC.h.",
-  "hCCCCCtttCCCCCh.","CCCCCCtttCCCCCC.",".CCCCCCCCCCCC...",
-  ".CCCCCCCCCCCC...",".CCCCCccCCCCC...",".CCCCCccCCCCC...",
-  ".CCCCCccCCCCC...",".CCCCC..CCCCC...",".CCCC....CCCC...",
-  "..PPP....PPP....","..PPP....PPP....","..PPP....PPP....",
-  "..OOO....OOO....",".OOOO....OOOO...",
+  "..H..HH..HH..H..",
+  ".kHHHHHHHHHHHHk.",
+  ".kHHHHHHHHHHHHk.",
+  ".kHHSSSSSSSSHHk.",
+  ".kHSSSSSSSSSSHk.",
+  ".kHSggSSSSggSHk.",
+  ".kHSSSSSSSSSSHk.",
+  ".kHSSSmmmmSSSHk.",
+  "..kSSSSSSSSSSk..",
+  "...kSSSSSSSSk...",
+  "..kCCCCttCCCCk..",
+  ".kCkCCCttCCCkCk.",
+  "kSkCCCCttCCCCkSk",
+  ".kkCCCCCCCCCCkk.",
+  "..kCCCCCCCCCCk..",
+  "..kCCCCccCCCCk..",
+  "..kCCCCccCCCCk..",
+  "..kCCCCccCCCCk..",
+  "..kCCCk..kCCCk..",
+  "..kCCk....kCCk..",
+  "...kPPk..kPPk...",
+  "...kPPk..kPPk...",
+  "...kPPk..kPPk...",
+  "...kOOk..kOOk...",
+  "..kOOOk..kOOOk..",
 ], SCI);
 // floating ghost
 const GHOST = build("GHOST",[

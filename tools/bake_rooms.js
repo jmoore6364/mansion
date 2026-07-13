@@ -82,6 +82,11 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   h.box(60,128,40,32,6,0); h.R(60,128,40,3,14);
   h.L(60,128,100,160,8); h.L(100,128,60,160,8);
   for(let yy=132;yy<158;yy+=8) h.L(62,yy,98,yy,8);      // slats
+  // hanging oil lamp on a chain
+  for(let y=0;y<16;y+=2) h.P(112,y,7);
+  h.box(105,16,15,11,6,0); h.D(107,18,11,7,14,6); h.R(109,27,7,2,0);
+  // small book stack on the shelf
+  h.box(226,58,10,3,4,0); h.box(227,55,9,3,1,0); h.box(228,52,8,3,2,0);
   // cobwebs
   h.L(0,0,30,30,7); h.L(30,0,0,30,7); h.L(W,0,W-30,30,7);
   for(let i=1;i<6;i++) h.L(i*5,0,0,i*5,8);
@@ -121,6 +126,19 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   h.box(210,118,56,10,6,0); h.R(214,114,48,4,14);       // table top + doily
   h.L(218,128,216,158,6); h.L(258,128,260,158,6);       // cabriole legs
   h.L(216,158,224,158,6); h.L(254,158,262,158,6);
+  // stone fireplace between the window and the portrait
+  h.box(102,102,44,58,8,0);                             // stone surround
+  for(let y=106;y<156;y+=10) for(let x=105;x<143;x+=12) h.box(x,y,10,8,8,0);
+  h.box(98,98,52,7,6,0); h.R(100,99,48,2,14);           // mantel
+  h.box(110,116,28,40,0,0);                             // firebox
+  h.D(112,146,24,8,4,12); h.D(116,142,16,4,12,14);      // glowing embers
+  h.R(114,152,8,3,6); h.R(126,150,9,3,6);               // charred logs
+  h.box(104,90,6,9,14,0); h.box(138,90,6,9,14,0);       // brass candlesticks
+  h.P(106,88,12); h.P(140,88,12);                       // little flames
+  // spider dangling from the ceiling
+  for(let y=6;y<30;y+=2) h.P(268,y,7);
+  h.R(266,30,5,4,0); h.P(265,31,0); h.P(271,31,0);
+  h.L(263,34,265,32,0); h.L(273,34,271,32,0); h.L(263,29,265,31,0); h.L(273,29,271,31,0);
   // cobwebs
   h.L(0,0,28,28,7); h.L(28,0,0,28,7); h.L(W,0,W-28,28,7);
   save("upstairs", f);
@@ -157,6 +175,22 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   h.box(262,76,52,84,0,8);
   for(let i=0;i<14;i++){ h.P(288-i,76-Math.round(Math.sqrt(196-(i*i))*0.0),8); }
   h.box(266,82,44,76,0,0); h.D(266,82,44,76,0,8);       // dark opening
+  // rusty chains hanging from the ceiling
+  for(const cx of [148,240]){
+    for(let y=0;y<34;y+=4){ h.box(cx-1,y,3,3,7,0); h.P(cx,y+3,8); }
+    h.L(cx-3,36,cx+3,36,7); h.P(cx,38,7);               // hook
+  }
+  // scattered bone pile (right of the sarcophagus)
+  h.D(206,152,34,8,7,8);
+  h.R(208,150,12,2,15); h.R(224,153,10,2,15); h.R(214,156,14,2,7);
+  h.P(207,149,15); h.P(220,149,15); h.P(223,152,15); h.P(234,152,15);
+  h.box(238,146,10,9,7,0); h.P(240,149,0); h.P(244,149,0);   // stray skull
+  // cracks in the floor
+  h.L(30,168,44,176,0); h.L(44,176,40,186,0);
+  h.L(250,170,262,180,0); h.L(262,180,258,190,0);
+  // corner spider web
+  for(let i=1;i<6;i++) h.L(W-i*7,0,W,i*7,7);
+  h.L(W-30,0,W,30,8);
   save("catacombs", f);
 })();
 
@@ -179,6 +213,21 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   // candlestick bases (flames dynamic at 69,112 / 249,112)
   h.box(66,116,12,6,14,0); h.R(70,120,4,30,7); h.R(70,118,4,2,8);
   h.box(246,116,12,6,14,0); h.R(250,120,4,30,7); h.R(250,118,4,2,8);
+  // rose window above the altar, leaking moonlight
+  for(let j=-16;j<=16;j++)for(let i=-16;i<=16;i++){
+    const d=i*i+j*j;
+    if(d<=16*16){ h.P(160+i,36+j, d>14*14?0 : (((i+j)&1)?9:1)); }
+  }
+  for(let a=0;a<8;a++){ const ang=a*Math.PI/4;
+    h.L(160,36, 160+Math.cos(ang)*14|0, 36+Math.sin(ang)*14|0, 0); }
+  h.R(158,34,5,5,14); h.P(160,36,15);                   // glowing heart
+  for(let j=0;j<14;j++){ if(j&1){ h.P(150-j,52+j,9); h.P(170+j,52+j,9); } } // faint beams
+  // heraldic banners on the columns
+  for(const bx of [96,212]){
+    h.box(bx+1,24,10,26,4,0);
+    h.P(bx+3,50,4); h.P(bx+5,52,4); h.P(bx+7,50,4);     // swallowtail
+    h.R(bx+4,32,4,4,14); h.P(bx+5,38,14);               // gold emblem
+  }
   // ornate glass case frame on the altar (inner dynamic)
   h.box(130,68,60,56,14,0); h.box(132,70,56,52,11,0);   // gilt + glass frame
   h.P(130,68,15); h.P(190,68,15); h.P(130,124,15); h.P(190,124,15);
@@ -215,6 +264,22 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   // operating slab (right, near Hammerstein)
   h.box(244,120,72,12,7,0); h.L(248,132,248,158,8); h.L(310,132,310,158,8);
   h.D(244,120,72,4,7,8);
+  // specimen shelf above the workbench
+  h.box(36,84,54,6,7,0); h.R(36,90,54,2,0);
+  for(let i=0;i<3;i++){ const jx=40+i*17;
+    h.box(jx,66,13,18,2,0); h.D(jx+1,67,11,16,2,10);    // glowing green jars
+    h.R(jx+1,64,11,3,7); h.R(jx+2,63,9,1,0);            // lids
+  }
+  h.P(45,74,15); h.P(46,74,0);                          // ...an eye, watching
+  h.P(62,76,15); h.P(63,76,0);
+  h.R(74,72,3,8,5);                                     // something coiled
+  // thick cable from the machine to the slab
+  h.L(194,110,214,126,0); h.L(214,126,244,124,0);
+  h.L(194,111,214,127,8); h.L(214,127,244,125,8);
+  h.L(194,112,214,128,0); h.L(214,128,244,126,0);
+  // hazard stripes on the machine base
+  for(let x=118;x<192;x+=8){ for(let j=0;j<5;j++) for(let i=0;i<4;i++) h.P(x+i+j,117+j,14); }
+  h.R(116,116,78,1,0); h.R(116,122,78,1,0);
   save("lab", f);
 })();
 
