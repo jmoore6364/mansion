@@ -207,7 +207,7 @@ const EGA = [
 const RGB = EGA.map(c => `rgb(${c[0]},${c[1]},${c[2]})`);
 
 /* Build tag — bump on each deploy to bust cached art (see loadImg). */
-const BUILD = "20260625c";
+const BUILD = "20260625d";
 
 /* ---------- Canvas setup ---------- */
 const W = 320, H = 200;
@@ -745,8 +745,9 @@ const rooms = {
       {x:146,y:148,w:48,h:12, cmd:()=> flag("mat_moved")?"look mat":"get mat"},
       {x:148,y:108,w:44,h:44, cmd:()=> flag("door_open")?"go in":"open door"},
       {x:50,y:100,w:150,h:10, cmd:"look sign"},
-      {x:244,y:14,w:72,h:138, cmd:"look tree"},
-      {x:248,y:10,w:32,h:30,  cmd:"look moon"},
+      {x:238,y:14,w:82,h:110, cmd:"look tree"},
+      {x:232,y:124,w:88,h:28, cmd:"look fence"},
+      {x:6,y:6,w:34,h:32,     cmd:"look moon"},
       {x:18,y:46,w:26,h:80,   cmd:"look lamp"}
     ],
     draw(){
@@ -788,7 +789,10 @@ const rooms = {
       if(noun==="window") return say("Dusty glass. Vague shapes of furniture lurk within.",14);
       if(noun==="sign") return say("'YE OLDE ANTIQUES - Est. a very long time ago.'",14);
       if(noun==="lamp"||noun==="lamppost"||noun==="light") return say("A gas lamp flickers, fighting the fog.",14);
-      if(noun==="tree") return say("A gnarled old tree, its branches clawing at the moon. Something rustles in the leaves.",10);
+      if(noun==="tree") return say("A gnarled old tree droops over the picket fence. Something rustles in the leaves.",10);
+      if(noun==="fence"||noun==="pickets") return say("A weathered picket fence. A few slats are missing. You don't want to know what took them.",6);
+      if(noun==="chimney"||noun==="smoke") return say("A crooked brick chimney breathes a thin curl of smoke. So somebody IS home.",7);
+      if(noun==="shutters"||noun==="shutter") return say("Teal shutters, paint peeling. One creaks on its hinge.",3);
       if(noun==="pumpkin"||noun==="jack"||noun==="lantern"||noun==="jackolantern") return say("A grinning jack-o'-lantern guards the step, its candle long dead... or is it?",6);
       if(noun==="bat") return say("A lone bat wheels across the face of the moon. Charming neighborhood.",7);
       return null;
