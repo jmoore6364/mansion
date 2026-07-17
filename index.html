@@ -207,7 +207,7 @@ const EGA = [
 const RGB = EGA.map(c => `rgb(${c[0]},${c[1]},${c[2]})`);
 
 /* Build tag — bump on each deploy to bust cached art (see loadImg). */
-const BUILD = "20260625e";
+const BUILD = "20260625f";
 
 /* ---------- Canvas setup ---------- */
 const W = 320, H = 200;
@@ -389,6 +389,7 @@ const Sound = (() => {
     if(ambRoom==="crypt" && ambTick%6===0) tone(1046,0.05,null,0.03);          // eerie tone
     if(ambRoom==="lab" && ambTick%3===0) tone(1245,0.02,null,0.025);           // electric crackle
     if(ambRoom==="street" && ambTick%4===0) tone(78,0.20,null,0.03);           // low wind
+    if(ambRoom==="attic" && ambTick%4===0) tone(88+(ambTick%2)*14,0.09,null,0.04); // creaking timbers
   }
   setInterval(ambientStep, 650);
   return {
@@ -605,7 +606,7 @@ const game = {
   invOpen: false, // inventory panel visible
   tapFx: null,    // transient tap highlight {x,y,w,h,life}
   follow: null,   // Penelope follower position
-  gargIdx: 0, tauntIdx: 0, tauntT: 0,
+  gargIdx: 0, ravenIdx: 0, tauntIdx: 0, tauntT: 0,
   rat: null, ghost: null
 };
 function flag(k){ return !!game.flags[k]; }
@@ -634,7 +635,8 @@ const Haptic = {
 const SCORES = {
   key:10, shop:5, oil:10, music:10, lantern:10, oil_clock:10,
   open_clock:10, descend:5, coin:15, gate:15, freed:20,
-  lab:5, gloves:10, defeat:25
+  lab:5, gloves:10, defeat:25,
+  ashes:5, chest:10, banish:10
 };
 const MAX_SCORE = Object.values(SCORES).reduce((a,b)=>a+b,0);
 function award(name){
@@ -699,7 +701,9 @@ const ITEMS = {
   coin:    { name:"a silver coin" },
   music:   { name:"an antique music box" },
   lantern: { name:"a lit brass lantern" },
-  gloves:  { name:"a pair of rubber gloves" }
+  gloves:  { name:"a pair of rubber gloves" },
+  smallkey:{ name:"a small iron key" },
+  amulet:  { name:"a silver amulet" }
 };
 const ITEM_DESC = {
   key:    "A heavy brass key, worn smooth. It let you into the shop.",
@@ -707,7 +711,9 @@ const ITEM_DESC = {
   coin:   "A cold tarnished silver coin. About the size of a certain slot...",
   music:  "Penelope's antique music box. Winding it in the right place may matter.",
   lantern:"A lit brass lantern, burning warm and steady. It banishes the dark.",
-  gloves: "Thick rubber gloves. Insulating - the sort of thing one wears around live wires."
+  gloves: "Thick rubber gloves. Insulating - the sort of thing one wears around live wires.",
+  smallkey:"A small iron key, sooty from the fireplace ashes. It would fit a little lock.",
+  amulet: "A silver amulet on a fine chain, cold to the touch. Old silver is said to send restless spirits wailing home."
 };
 
 /* ---- NPC dialogue + villain taunts ---- */
@@ -716,7 +722,15 @@ const GARGOYLE_LINES = [
   "'The dead keep their tolls, morsel. SILVER pays the ferryman's GATE - nothing less.'",
   "'Your sweetheart sleeps in glass beyond the bars. Only her own LULLABY will wake her.'",
   "'And mind the doctor's machine. Bare hands on live iron? He learned THAT lesson... twice.'",
+  "'A cold sister guards the sleeping glass. Old SILVER, hidden high in the RAFTERS, sends her kind wailing home.'",
   "The gargoyle settles back into stone. 'I have said my piece. Begone, and do try to scream prettily.'"
+];
+const RAVEN_LINES = [
+  "The raven cocks its head. 'CAW. A visitor. How novel. How doomed.'",
+  "'The chessst? The doctor locked his mother's silver in it. The little key went into the FIRE, downstairs. CAW.'",
+  "'The pale one below the earth cannot be dodged forever, featherless thing. Silver. Ssssilver sends her home.'",
+  "'I'd help you myself, but I'm a bird. CAW CAW.'",
+  "The raven fixes you with one oil-black eye. 'Nevermore,' it says, smugly. You feel it has waited YEARS for that."
 ];
 const HAMMER_TAUNTS = [
   "MWAHAHA! You'll never reach my lever, boy!",
@@ -893,6 +907,8 @@ const rooms = {
       {x:222,y:86,w:30,h:38, cmd:()=> flag("lantern_taken")?"look lantern":"get lantern"},
       {x:150,y:36,w:40,h:46, cmd:"look portrait"},
       {x:40,y:30,w:52,h:70,  cmd:"look window"},
+      {x:98,y:90,w:52,h:70,  cmd:()=> flag("ashes_searched")?"look fireplace":"search ashes"},
+      {x:252,y:4,w:26,h:44,  cmd:"go attic"},
       {x:210,y:118,w:56,h:12,cmd:"look table"}
     ],
     bg:"art/upstairs.png",
@@ -934,7 +950,14 @@ const rooms = {
       text("THE PARLOR ABOVE", 96, 8, 13);
     },
     look(noun){
-      if(!noun||noun==="around"||noun==="parlor"||noun==="room") return say("A musty parlor. Moonlight spills through a tall WINDOW. A grim PORTRAIT watches from the wall. A LANTERN sits on a side TABLE. STAIRS lead DOWN.",13);
+      if(!noun||noun==="around"||noun==="parlor"||noun==="room") return say("A musty parlor. Moonlight spills through a tall WINDOW; a grim PORTRAIT watches over a cold FIREPLACE. A LANTERN sits on a TABLE, and a pull-CORD dangles from a hatch in the ceiling. STAIRS lead DOWN.",13);
+      if(noun==="fireplace"||noun==="fire"||noun==="embers"||noun==="ashes"||noun==="ash"){
+        if(flag("ashes_searched")) return say("Cold ashes, already raked through. The embers wink like they know something.",7);
+        return say("A stone fireplace, embers barely alive. Something small GLINTS in the ashes. Try: SEARCH ASHES.",14);
+      }
+      if(noun==="mantel"||noun==="candles"||noun==="candlesticks") return say("Two brass candlesticks burn on the mantel. Nobody lit them. Best not to dwell on that.",13);
+      if(noun==="cord"||noun==="hatch"||noun==="ceiling"||noun==="attic") return say("A frayed pull-cord hangs from a hatch in the ceiling. An ATTIC. Try: GO ATTIC.",14);
+      if(noun==="spider") return say("A fat spider descends slowly on its thread, minding its own sinister business.",7);
       if(noun==="lantern"||noun==="lamp"||noun==="light"){
         if(hasItem("lantern")) return say("Your brass lantern, burning steady and warm. It'll light the darkest tomb.",14);
         if(flag("lantern_taken")) return say("You already took the lantern.",7);
@@ -946,6 +969,74 @@ const rooms = {
       if(noun==="window") return say("Moonlight and fog. You can see the cobblestone street far below.",14);
       if(noun==="table") return say(flag("lantern_taken")?"A small side table, now bare.":"A side table holding a lit LANTERN.",14);
       if(noun==="stairs"||noun==="stair"||noun==="down") return say("The stairs lead back DOWN to the shop. Walk RIGHT.",14);
+      return null;
+    }
+  },
+
+  /* ---------------- THE ATTIC ---------------- */
+  attic: {
+    name:"The Dusty Attic",
+    walk:{x:8,y:150,w:304,h:38}, enterX:44, enterY:158,
+    bg:"art/attic.png",
+    over(){
+      text("THE DUSTY ATTIC", 100, 8, 7);
+      text("DOWN", 24, 130, 11);
+      // the raven, perched and fidgeting
+      const t=performance.now();
+      const bob=(Math.sin(t/500)>0.6)?1:0;
+      const rx=272, ry=56+bob;
+      rect(rx-1,ry+3,12,7,8); rect(rx,ry+4,10,5,0);        // body
+      rect(rx+7,ry,6,6,8); rect(rx+8,ry+1,4,4,0);          // head
+      rect(rx+12,ry+3,3,2,6);                              // beak
+      const blink=((t/2200|0)%4)===0;
+      rect(rx+10,ry+2,1,1, blink?0:14);                    // eye
+      rect(rx+1,ry+2,6,3,8);                               // folded wing sheen
+      rect(rx+2,ry+10,2,3,6); rect(rx+7,ry+10,2,3,6);      // feet on the perch
+      // chest lid + contents
+      if(flag("chest_open")){
+        rect(172,108,44,12,6); rect(172,108,44,2,14); rect(172,118,44,2,0);  // lid tipped back
+        rect(174,110,4,10,8); rect(210,110,4,10,8);        // lid straps
+        if(!flag("amulet_taken")){
+          const g=(Math.sin(t/200)>0)?15:11;
+          rect(190,124,8,6,7); rect(192,126,4,3,g);        // the amulet, glinting
+        }
+      } else {
+        rect(170,112,48,10,6); rect(170,112,48,2,14); rect(170,120,48,2,0);  // closed lid
+        rect(190,116,6,5,14); rect(192,118,2,3,0);         // little iron lock
+      }
+    },
+    hotspots:[
+      {x:16,y:96,w:44,h:64,  cmd:"go down"},
+      {x:168,y:100,w:52,h:56,cmd:()=> flag("chest_open") ? (flag("amulet_taken")?"look chest":"get amulet")
+                                     : (hasItem("smallkey")?"open chest":"look chest")},
+      {x:258,y:44,w:34,h:30, cmd:"talk raven"},
+      {x:134,y:24,w:52,h:52, cmd:"look window"},
+      {x:64,y:84,w:36,h:72,  cmd:"look dummy"}
+    ],
+    draw(){
+      // procedural fallback if the painting hasn't loaded
+      rect(0,0,W,160,6); dither(0,0,W,160,6,0);
+      rect(0,160,W,40,8); rect(0,160,W,2,0);
+      rect(16,96,44,64,0); text("DOWN",24,130,11);
+      rect(170,112,48,44,6); text("CHEST",176,132,14);
+      text("THE DUSTY ATTIC", 100, 8, 7);
+    },
+    look(noun){
+      if(!noun||noun==="around"||noun==="attic"||noun==="room") return say("A low attic thick with dust. Moonlight leaks through a round WINDOW. A banded CHEST sits under the eaves, a RAVEN perches on a rafter, and a dress DUMMY lurks in the corner. The hatch leads back DOWN.",13);
+      if(noun==="chest"||noun==="trunk"||noun==="box"){
+        if(!flag("chest_open")){
+          if(hasItem("smallkey")) return say("A banded wooden chest with a small iron lock. Your little key should fit. Try: OPEN CHEST.",14);
+          return say("A banded wooden chest, locked tight. The keyhole is tiny - a SMALL key. Where would a paranoid doctor hide one?",14);
+        }
+        if(!flag("amulet_taken")) return say("The chest stands open. Inside, a silver AMULET gleams on rotted velvet. Try: GET AMULET.",14);
+        return say("Empty now, save for rotted velvet and the smell of old secrets.",7);
+      }
+      if(noun==="raven"||noun==="bird"||noun==="crow") return say("A glossy black raven watches you with one clever eye. It looks like it wants to TALK. Of course it does.",13);
+      if(noun==="window"||noun==="porthole"||noun==="moon") return say("A round porthole window, glazed with grime. The moon glares in like a suspicious eye.",14);
+      if(noun==="dummy"||noun==="mannequin"||noun==="form") return say("A dressmaker's dummy in a moth-eaten shawl. You could SWEAR it was facing the other way a moment ago.",12);
+      if(noun==="crates"||noun==="crate"||noun==="boxes") return say("Crates stenciled 'PROPERTY OF DR. H.' Best left unopened - you remember the LAST crate.",7);
+      if(noun==="cobwebs"||noun==="web"||noun==="webs"||noun==="rafters"||noun==="beams") return say("The rafters sag under decades of cobwebs. Something scuttles out of sight.",7);
+      if(noun==="hatch"||noun==="ladder"||noun==="down") return say("The hatch and ladder lead back DOWN to the parlor.",14);
       return null;
     }
   },
@@ -1118,8 +1209,9 @@ const rooms = {
       }
       if(noun==="candle"||noun==="candles") return say("Black candles burn with a cold blue flame.",11);
       if(noun==="ghost"||noun==="spirit"||noun==="phantom"){
+        if(flag("ghost_banished")) return say("Banished. Only a cold spot remains where the spirit kept its vigil.",7);
         if(flag("freed")) return say("The guardian spirit faded the moment Penelope woke.",7);
-        return say("A pale spirit drifts above the altar, guarding the case. DON'T let it touch you - time your moves.",13);
+        return say("A pale spirit drifts above the altar, guarding the case. DON'T let it touch you - time your moves. (Old SILVER might send it packing for good...)",13);
       }
       return null;
     }
@@ -1237,6 +1329,7 @@ function handleCommand(raw){
     use:"use", insert:"use", put:"use", give:"use", pay:"use", oil:"use",
     pull:"use", flip:"use", yank:"use", throw:"use", wear:"use",
     open:"open", unlock:"open",
+    search:"search", dig:"search", sift:"search", rake:"search",
     talk:"talk", speak:"talk", ask:"talk", greet:"talk", say:"talk",
     h:"help","?":"help", commands:"help",
     restore:"load", continue:"load",
@@ -1331,9 +1424,31 @@ function handleCommand(raw){
         setFlag("coin_taken"); giveItem("coin"); Sound.pickup(); Haptic.buzz(20); award("coin");
         return say("You snatch the SILVER COIN off the sarcophagus lid. The skull's grin seems to widen...",10);
       }
+      if(game.room==="upstairs" && (noun==="key"||noun==="smallkey")){
+        if(hasItem("smallkey")) return say("You already have the little key.",7);
+        return say("You'll have to SEARCH the fireplace ASHES for it.",14);
+      }
+      if(game.room==="attic" && (noun==="amulet"||noun==="silver"||noun==="necklace")){
+        if(hasItem("amulet")) return say("The amulet already hangs cold around your neck.",7);
+        if(!flag("chest_open")) return say("Whatever silver there is lies locked inside the CHEST.",14);
+        setFlag("amulet_taken"); giveItem("amulet"); Sound.pickup(); Haptic.buzz(20);
+        return say("You lift the silver AMULET from the chest and hang it around your neck. The attic goes very, very quiet.",10);
+      }
       if(noun==="key" && !hasItem("key")) return say("You don't see a key here.",7);
       if(!noun) return say("Get what, exactly?",7);
       return say("You can't take that.",7);
+    }
+
+    case "search": {
+      if(game.room==="upstairs" && (!noun||["ashes","ash","fireplace","fire","embers"].includes(noun))){
+        if(flag("ashes_searched")) return say("Just cold ash now. You've been thorough.",7);
+        setFlag("ashes_searched"); giveItem("smallkey"); Sound.pickup(); Haptic.buzz(20); award("ashes");
+        return say("You rake through the warm ashes... and fish out a SMALL IRON KEY, sooty but sound. Now what does it open?",10);
+      }
+      if(game.room==="catacombs" && ["bones","bone","pile"].includes(noun||"")){
+        return say("You poke through the bone pile. The bones object. You stop.",7);
+      }
+      return say("You search, and find nothing but dust.",7);
     }
 
     case "open": {
@@ -1363,6 +1478,12 @@ function handleCommand(raw){
           if(flag("gate_open")) return say("The gate is already open.",10);
           return say("The gate won't budge. Maybe that COIN SLOT is the key. Try: USE COIN.",14);
         }
+      }
+      if(game.room==="attic" && (noun==="chest"||noun==="trunk"||!noun)){
+        if(flag("chest_open")) return say(flag("amulet_taken")?"The chest is open and empty.":"It's open. The silver AMULET waits inside. Try: GET AMULET.",10);
+        if(!hasItem("smallkey")) return say("Locked. The keyhole is tiny - you need a SMALL key.",14);
+        setFlag("chest_open"); Sound.chime(); award("chest");
+        return say("The little key turns. The lid creaks back on a silver AMULET, gleaming on rotted velvet. Try: GET AMULET.",10);
       }
       if(noun==="music"||noun==="box") return say("Try WIND BOX instead.",7);
       return say("You can't open that.",7);
@@ -1394,6 +1515,15 @@ function handleCommand(raw){
         if(!hasItem("gloves")) return say("You don't have any gloves.",7);
         return say("You snug the rubber gloves on. Now your hands are insulated - time to deal with that LEVER.",11);
       }
+      if(noun==="amulet"||noun==="silver"){
+        if(!hasItem("amulet")) return say("You don't have an amulet.",7);
+        if(game.room==="crypt" && game.ghost && !flag("ghost_banished")){
+          setFlag("ghost_banished"); Sound.chime(); award("banish");
+          return say("You hold the silver amulet high. It flares MOON-WHITE - the guardian spirit shrieks, unravels like smoke, and is gone. The way to the case is clear.",14);
+        }
+        if(game.room==="crypt" && flag("ghost_banished")) return say("The spirit is already gone. The amulet rests, satisfied.",7);
+        return say("The amulet hums faintly against your chest. Nothing here to banish.",11);
+      }
       if(noun==="lever"||noun==="switch"){
         if(game.room!=="lab") return say("There's no lever here.",7);
         if(flag("defeated")) return say("The lever is already thrown. The machine is dead.",10);
@@ -1424,6 +1554,11 @@ function handleCommand(raw){
     }
 
     case "talk": {
+      if(game.room==="attic"){
+        const line = RAVEN_LINES[game.ravenIdx % RAVEN_LINES.length];
+        game.ravenIdx++; Sound.blip();
+        return say(line, 13);
+      }
       if(game.room==="catacombs"){
         if(!hasItem("lantern")) return say("Something chuckles dryly in the dark, but you can't see it. You need a LIGHT.",7);
         const line = GARGOYLE_LINES[game.gargIdx % GARGOYLE_LINES.length];
@@ -1459,6 +1594,13 @@ function handleCommand(raw){
       }
       if(game.room==="upstairs"){
         if(["right","down","downstairs","out","stairs","stair","shop"].includes(dir)){ travel("shop"); return; }
+        if(["up","attic","hatch","ladder","cord"].includes(dir)){
+          travel("attic");
+          return say("You haul on the cord. A ladder unfolds with a shriek of hinges, and you climb up into the dark.",13);
+        }
+      }
+      if(game.room==="attic"){
+        if(["down","out","hatch","ladder","parlor","downstairs"].includes(dir)){ travel("upstairs"); return; }
       }
       if(game.room==="catacombs"){
         if(["up","west","left","stair","stairs","shop"].includes(dir)){ travel("shop"); return; }
@@ -1682,7 +1824,7 @@ function startNew(){
   try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
   game.inv=[]; game.flags={};
   game.score=0; game.deaths=0; game.awarded={};
-  game.follow=null; game.gargIdx=0; game.tauntIdx=0; game.tauntT=0; game.rat=null; game.ghost=null;
+  game.follow=null; game.gargIdx=0; game.ravenIdx=0; game.tauntIdx=0; game.tauntT=0; game.rat=null; game.ghost=null;
   game.scene="play"; travel("street");
   say("Welcome to YE OLDE ANTIQUES. Your beloved Penelope is somewhere inside...",14);
   Sound.beep();
@@ -1728,6 +1870,8 @@ function update(){
     else if(game.px >= wb.x+wb.w-SW){ travel("upstairs"); }
   } else if(game.room==="upstairs"){
     if(game.px >= wb.x+wb.w-SW){ travel("shop"); }
+  } else if(game.room==="attic"){
+    if(game.px <= wb.x+1){ travel("upstairs"); }
   } else if(game.room==="catacombs"){
     if(game.px <= wb.x+1){ travel("shop"); }
     else if(flag("gate_open") && game.px >= wb.x+wb.w-SW){ travel("crypt"); }
@@ -1740,6 +1884,8 @@ function update(){
   if(moving){
     if(game.room==="street" && flag("door_open") && game.px>146 && game.px<188 && keys.ArrowUp){ travel("shop"); }
     if(game.room==="shop" && flag("clock_open") && game.px>150 && game.px<196 && keys.ArrowUp){ travel("catacombs"); }
+    if(game.room==="upstairs" && game.px>246 && game.px<284 && keys.ArrowUp){ travel("attic"); }
+    if(game.room==="attic" && game.px>14 && game.px<62 && keys.ArrowDown){ travel("upstairs"); }
   }
   game.walking = moving;
   if(moving){
@@ -1770,7 +1916,7 @@ function update(){
     game.rat.x += game.rat.dir*1.4;
     if(game.rat.x<18 || game.rat.x>286) game.rat.dir*=-1;
   } else game.rat = null;
-  if(game.room==="crypt" && !flag("freed")){
+  if(game.room==="crypt" && !flag("freed") && !flag("ghost_banished")){
     if(!game.ghost) game.ghost = {x:212, y:96, dir:-1};
     game.ghost.x += game.ghost.dir*0.85;
     if(game.ghost.x<40 || game.ghost.x>252) game.ghost.dir*=-1;
@@ -1941,7 +2087,7 @@ function resetGame(){
   game.msg=""; game.msgTimer=0;
   game.score=0; game.deaths=0; game.awarded={};
   game.target=null; game.invOpen=false; game.tapFx=null; game.follow=null;
-  game.gargIdx=0; game.tauntIdx=0; game.tauntT=0; game.rat=null; game.ghost=null;
+  game.gargIdx=0; game.ravenIdx=0; game.tauntIdx=0; game.tauntT=0; game.rat=null; game.ghost=null;
   _titlePlayed=false; _winPlayed=false;
 }
 

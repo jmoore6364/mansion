@@ -135,10 +135,14 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   h.R(114,152,8,3,6); h.R(126,150,9,3,6);               // charred logs
   h.box(104,90,6,9,14,0); h.box(138,90,6,9,14,0);       // brass candlesticks
   h.P(106,88,12); h.P(140,88,12);                       // little flames
+  // attic hatch + dangling pull-cord (leads up to the attic)
+  h.box(250,2,30,8,6,0); h.R(252,4,26,2,8);             // hatch outline in the ceiling
+  for(let y=10;y<40;y+=2) h.P(264,y,7);                 // cord
+  h.box(262,40,5,6,14,0);                               // wooden pull-ring
   // spider dangling from the ceiling
-  for(let y=6;y<30;y+=2) h.P(268,y,7);
-  h.R(266,30,5,4,0); h.P(265,31,0); h.P(271,31,0);
-  h.L(263,34,265,32,0); h.L(273,34,271,32,0); h.L(263,29,265,31,0); h.L(273,29,271,31,0);
+  for(let y=6;y<30;y+=2) h.P(300,y,7);
+  h.R(298,30,5,4,0); h.P(297,31,0); h.P(303,31,0);
+  h.L(295,34,297,32,0); h.L(305,34,303,32,0); h.L(295,29,297,31,0); h.L(305,29,303,31,0);
   // cobwebs
   h.L(0,0,28,28,7); h.L(28,0,0,28,7); h.L(W,0,W-28,28,7);
   save("upstairs", f);
@@ -281,6 +285,69 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   for(let x=118;x<192;x+=8){ for(let j=0;j<5;j++) for(let i=0;i<4;i++) h.P(x+i+j,117+j,14); }
   h.R(116,116,78,1,0); h.R(116,122,78,1,0);
   save("lab", f);
+})();
+
+/* ===================== THE ATTIC ===================== */
+(() => {
+  const f = Frame(W,H), h = H_(f);
+  let s=21; const rnd=()=>((s=(s*1103515245+12345)&0x7fffffff)/0x7fffffff);
+  h.R(0,0,W,160,0);
+  // sloped roof planes of rough planks
+  for(let y=0;y<126;y++){
+    const half=Math.min(150, 20+y*1.9);                 // widening from the ridge
+    const lx=Math.max(0,160-half), rx=Math.min(W-1,160+half);
+    for(let x=lx;x<=rx;x++) h.P(x,y, ((x+y*3)%14<1)?8:6);
+  }
+  for(let i=0;i<7;i++){                                 // rafter beams
+    const y0=6+i*18;
+    h.L(Math.max(0,160-(20+y0*1.9)),y0, 160,Math.max(0,y0-((160-(160-(20+y0*1.9)))/1.9)|0), 8);
+  }
+  // plank courses following the slopes
+  for(let y=8;y<126;y+=12){
+    const half=Math.min(150, 20+y*1.9);
+    h.R(Math.max(0,160-half),y, Math.min(W,half*2),1, 8);
+  }
+  h.L(0,126,W,126,0);                                   // wall/kneewall line
+  h.R(0,127,W,9,8); h.D(0,127,W,9,8,6);                 // knee wall
+  // plank floor (visible band above the HUD)
+  h.R(0,136,W,24,6); h.R(0,136,W,2,0);
+  for(let x=0;x<W;x+=26) h.L(x,138,x,160,8);
+  h.D(0,156,W,4,8,6);
+  h.R(0,160,W,40,8);
+  // open hatch with ladder (left)
+  h.box(16,120,44,40,0,8);
+  for(let i=0;i<4;i++) h.R(22,152-i*8,32,3,6);
+  h.D(20,122,36,10,14,6);                               // lamplight from below
+  // round porthole window (center-top), moonlight
+  for(let j=-18;j<=18;j++)for(let i=-18;i<=18;i++){
+    const d=i*i+j*j;
+    if(d<=18*18) h.P(160+i,48+j, d>16*16?0 : (((i+j)&1)?9:1));
+  }
+  h.L(160,32,160,64,0); h.L(144,48,176,48,0);
+  h.R(150,38,8,8,15);                                   // the moon, glaring in
+  for(let j=0;j<20;j++) if(j&1){ h.P(148-j,66+j,9); h.P(172+j,66+j,9); } // moonbeams
+  // banded chest under the eaves (lid + lock drawn by over())
+  h.box(170,120,48,36,6,0); h.D(171,121,46,34,6,4);
+  h.R(178,120,5,36,8); h.R(205,120,5,36,8);             // iron bands
+  // raven's perch: a jutting rafter stub
+  h.box(256,66,40,5,6,0); h.R(258,71,36,2,8);
+  // dressmaker's dummy in the corner (it moved. it definitely moved.)
+  h.box(74,88,20,8,7,0);                                // shoulders
+  h.R(80,80,8,8,7); h.R(82,82,4,4,8);                   // head knob
+  for(let j=0;j<44;j++){ const w=20+((j/6)|0)*2;        // shawled body flaring down
+    h.R(84-(w>>1), 96+j, w, 1, (j%9<1)?8:7); }
+  h.box(78,140,12,4,6,0); h.R(82,144,4,12,6);           // stand
+  // stenciled crates (right of the chest)
+  h.box(228,128,30,28,6,0); h.L(228,128,258,156,8); h.L(258,128,228,156,8);
+  h.box(236,112,22,16,6,0); h.R(238,116,18,2,8);
+  // cobwebs draped everywhere
+  for(let i=1;i<7;i++){ h.L(i*6,0,0,i*6,7); h.L(W-i*6,0,W,i*6,7); }
+  for(let k=0;k<5;k++){ const wx=60+k*46;               // sagging web strands
+    for(let x=0;x<26;x++) h.P(wx+x, 4+((x*x)/26|0)+k*2, (x&1)?7:8);
+  }
+  // drifting dust motes
+  for(let n=0;n<26;n++) h.P((rnd()*W)|0, (rnd()*120)|0, 7);
+  save("attic", f);
 })();
 
 console.log("done.");

@@ -58,7 +58,7 @@ travel between rooms.
 
 ## The adventure
 
-A six-room quest in two acts to rescue Penelope, scored out of **160 points**:
+A seven-room quest in two acts to rescue Penelope, scored out of **185 points**:
 
 1. **Cobblestone Street** — find the brass key hidden under the welcome mat,
    unlock the shop door.
@@ -66,21 +66,28 @@ A six-room quest in two acts to rescue Penelope, scored out of **160 points**:
    oil the cursed grandfather clock, and open it to reveal a hidden stair.
    *(Curiosity about the scratching crate is... not advised.)*
 3. **The Upstairs Parlor** — climb the stairs and take the lit **lantern** from
-   the side table; the catacombs below are pitch black without a light.
-4. **The Catacombs** — by lantern-light, lift the silver coin from the
+   the side table; the catacombs below are pitch black without a light. **Search
+   the fireplace ashes** for a small iron key, and pull the ceiling cord to
+   reach...
+4. **The Dusty Attic** *(optional side quest)* — chat with a smug **raven**,
+   unlock the banded chest with the little key, and claim the **silver amulet** —
+   the only thing that can banish the crypt's guardian ghost for good.
+5. **The Catacombs** — by lantern-light, lift the silver coin from the
    sarcophagus lid (don't open it!), feed it to the barred gate's coin slot, and
    head east.
-5. **The Forgotten Crypt** — wind Penelope's lullaby on the music box to free
-   her... which awakens **Dr. Hammerstein** and grinds open a door to the east.
-6. **Hammerstein's Laboratory** (Act II finale) — Penelope now follows you. Grab
+6. **The Forgotten Crypt** — a lethal **guardian ghost** swoops over the altar:
+   dodge its patrol, or **use the amulet** to banish it. Then wind Penelope's
+   lullaby on the music box to free her... which awakens **Dr. Hammerstein** and
+   grinds open a door to the east.
+7. **Hammerstein's Laboratory** (Act II finale) — Penelope now follows you. Grab
    the rubber **gloves** from the workbench, then throw the machine's power lever
    to defeat the doctor and escape. *(Pulling it bare-handed is a shocking
    mistake.)* **The End.**
 
 Features the full Hugo experience: a **Sierra-style score** and **death counter**,
 **sudden deaths with a respawn screen**, a **companion who follows you** in Act II,
-a **talking gargoyle NPC** who hints at the puzzles, **villain taunts** during the
-finale, **room-by-room ambient sound**, an **animated title screen**, a
+**talking NPCs** (a gargoyle and a raven) who hint at the puzzles, **villain
+taunts** during the finale, a lethal **guardian ghost** with a banish side-quest, **room-by-room ambient sound**, an **animated title screen**, a
 **save/restore system**, autosave on every room change, and a victory ending that
 rates a flawless run.
 
