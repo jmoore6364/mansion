@@ -57,17 +57,28 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   // EXIT doorway (left)
   h.box(8,96,40,64,0,8); h.box(12,100,32,56,1,0); h.D(12,100,32,56,1,9);
   h.R(6,94,44,3,6);                                     // lintel
-  // staircase UP (right) with railing
-  h.box(286,40,34,120,0,8);
-  for(let i=0;i<7;i++){ h.R(288,150-i*16,30,8,6); h.R(288,150-i*16,30,2,14); h.R(288,158-i*16,30,2,0); }
-  h.L(286,150,286,44,8); h.L(300,140,300,52,7);         // banister
+  // staircase UP (right): a real diagonal flight with banister
+  h.box(294,32,26,58,0,8); h.D(296,34,22,54,1,0);       // upper landing doorway
+  for(let i=0;i<9;i++){                                 // treads & risers
+    const top=88+i*8, left=310-i*6;
+    h.R(left,top,320-left,8,6);
+    h.R(left,top,320-left,2,14);
+    h.L(left,top,left,top+8,0);
+  }
+  h.R(256,158,64,2,0);                                  // base shadow
+  h.L(306,78,254,150,6); h.L(306,77,254,149,14);        // handrail
+  for(let i=0;i<6;i++){ h.R(300-i*9,86+i*12,2,13,6); }  // balusters
+  h.box(250,146,5,16,6,0); h.P(252,144,6);              // newel post + finial
   // wall pictures
   h.box(70,24,30,24,14,0); h.box(73,27,24,18,1,0); h.R(78,32,6,6,12);
   h.box(120,22,26,22,6,0); h.box(123,25,20,16,8,0);
   // shelf with clutter (music box spot 238,52 left clear for over())
   h.box(206,66,80,8,6,0); h.R(206,74,80,2,0);           // shelf board + shadow
-  h.box(210,46,12,20,2,0); h.R(212,44,8,4,10);          // a green vase
-  h.box(264,48,16,18,4,0); h.R(266,46,12,4,12);         // a red urn
+  h.R(213,46,6,5,2); h.box(210,50,12,12,2,0);           // green vase: neck + belly
+  h.R(212,62,8,4,2); h.P(212,52,10); h.P(213,53,10);    // foot + glaze highlight
+  h.box(264,48,16,18,4,0); h.R(268,44,8,4,4);           // red urn + domed lid
+  h.P(271,42,12); h.R(261,52,3,7,4); h.R(281,52,3,7,4); // knob + side handles
+  h.P(266,50,12); h.P(267,51,12);                       // glint
   // grandfather clock (closed) — centerpiece
   h.box(150,40,44,118,6,0);
   h.R(150,40,44,6,8); h.R(148,38,48,4,6);               // crown molding
@@ -104,10 +115,17 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   h.R(0,160,W,40,6); h.R(0,160,W,2,0);
   for(let x=0;x<W;x+=22) h.L(x,160,x,200,8);
   h.box(96,168,128,28,4,0); h.box(104,172,112,20,12,0); h.D(104,172,112,20,12,4);
-  // stairs DOWN (right) + railing
-  h.box(286,40,34,120,0,8);
-  for(let i=0;i<7;i++){ h.R(288,52+i*16,30,8,6); h.R(288,52+i*16,30,2,14); h.R(288,60+i*16,30,2,0); }
-  h.L(300,60,300,150,7);
+  // stairwell DOWN (right): dark opening with a descending flight
+  h.box(280,84,40,76,0,8);
+  h.D(282,86,36,6,5,0);                                 // gloom at the top
+  for(let i=0;i<6;i++){                                 // steps sinking away
+    const top=98+i*10, left=284+i*6;
+    h.R(left,top,320-left,4,8);
+    h.R(left,top,320-left,1,7);
+    h.R(left,top+4,320-left,6,0);
+  }
+  h.box(274,80,5,80,6,0); h.P(276,78,6);                // newel post + finial
+  h.L(282,92,318,128,6); h.L(282,91,318,127,14);        // descending handrail
   // tall arched window with moonlight + drapes
   h.box(40,28,52,76,0,8);
   for(let i=0;i<26;i++){ const yy=28-Math.round(Math.sqrt(26*26-(i-26)*(i-26))*0.0); } // (flat top kept)
@@ -123,9 +141,13 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   h.box(158,40,24,30,7,0);                              // painted figure (coat)
   h.R(162,42,16,12,12); h.P(166,46,0); h.P(174,46,0); h.R(165,51,10,2,4); // stern face
   // ornate side table (lantern spot 230,96 left clear)
-  h.box(210,118,56,10,6,0); h.R(214,114,48,4,14);       // table top + doily
-  h.L(218,128,216,158,6); h.L(258,128,260,158,6);       // cabriole legs
-  h.L(216,158,224,158,6); h.L(254,158,262,158,6);
+  h.box(210,118,56,10,6,0); h.R(212,120,52,2,14);       // table top + edge highlight
+  h.R(214,114,48,4,14);                                 // lace doily
+  for(const lx of [216,254]){                           // turned legs with knops
+    h.R(lx,128,5,30,6); h.R(lx,128,1,30,14);
+    h.box(lx-1,134,7,4,6,0); h.box(lx-1,146,7,4,6,0);
+  }
+  h.R(216,152,43,3,6); h.R(216,152,43,1,14);            // stretcher bar
   // stone fireplace between the window and the portrait
   h.box(102,102,44,58,8,0);                             // stone surround
   for(let y=106;y<156;y+=10) for(let x=105;x<143;x+=12) h.box(x,y,10,8,8,0);
@@ -157,13 +179,21 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   h.D(0,160,W,4,0,8);
   // niche skulls in the wall
   for(const nx of [30,300]){ h.box(nx-9,40,18,20,0,8); h.R(nx-5,46,10,8,7); h.P(nx-3,49,0); h.P(nx+2,49,0); }
-  // stair UP (left) — lit archway
-  h.box(6,90,36,70,0,8);
-  for(let i=0;i<6;i++){ h.R(10,150-i*9,28,5,8); h.R(10,150-i*9,28,1,7); }
-  h.D(10,92,28,12,14,6);                                // warm light from above
-  // torch brackets (flames are dynamic)
-  h.box(94,58,8,6,0,0); h.R(96,60,4,18,8);
-  h.box(214,58,8,6,0,0); h.R(216,60,4,18,8);
+  // stair UP (left) — lit archway with a flight receding into the light
+  h.box(6,88,36,72,0,8);
+  h.D(8,90,32,12,14,6);                                 // warm light from above
+  for(let i=0;i<6;i++){                                 // widest step nearest
+    const top=151-i*9, right=38-i*4;
+    h.R(8,top,right-8,9,8);
+    h.R(8,top,right-8,2,7);
+    h.L(right,top,right,top+9,0);
+  }
+  // torch brackets (flames are dynamic): iron cup + wrapped hafts
+  for(const tx of [96,216]){
+    h.box(tx-3,56,10,4,8,0);                            // iron cup
+    h.R(tx,60,4,18,6); h.P(tx,60,14);                   // wooden haft + glint
+    h.R(tx-1,64,6,2,8); h.R(tx-1,70,6,2,8);             // iron bands
+  }
   // stone gargoyle (eyes dynamic at 58,102 / 70,102)
   h.box(50,94,32,26,8,0); h.D(50,94,32,26,8,7);         // head block
   h.L(50,94,44,84,8); h.L(82,94,88,84,8);               // horns
@@ -214,9 +244,15 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   h.box(116,118,88,42,8,0); h.D(116,118,88,42,8,1);
   h.box(120,118,80,5,7,0);                              // altar top
   for(let cx=126;cx<196;cx+=12){ h.box(cx,134,8,18,0,8); }   // carved arches
-  // candlestick bases (flames dynamic at 69,112 / 249,112)
-  h.box(66,116,12,6,14,0); h.R(70,120,4,30,7); h.R(70,118,4,2,8);
-  h.box(246,116,12,6,14,0); h.R(250,120,4,30,7); h.R(250,118,4,2,8);
+  // brass candelabra (flames dynamic at 69,112 / 249,112)
+  for(const cx of [72,252]){
+    h.R(cx-2,120,4,10,15); h.P(cx+2,124,7); h.P(cx+2,128,7); // white candle + wax drips
+    h.box(cx-5,130,10,3,14,0);                          // drip tray
+    h.R(cx-1,133,3,12,6); h.P(cx-1,134,14);             // stem + glint
+    h.box(cx-4,138,8,3,14,0);                           // knop
+    h.box(cx-6,145,13,4,6,0); h.R(cx-4,144,8,1,14);     // stepped foot
+    h.R(cx-7,149,15,3,8);                               // base shadow
+  }
   // rose window above the altar, leaking moonlight
   for(let j=-16;j<=16;j++)for(let i=-16;i<=16;i++){
     const d=i*i+j*j;
@@ -263,8 +299,13 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   h.R(124,50,30,6,11); h.R(160,50,24,6,10);             // readout lights
   h.box(120,90,70,28,0,8);                              // control band (dials sit here)
   h.R(132,30,46,8,7);                                   // coil mount plate
-  // gauges flanking
-  for(const gx of [102,196]){ h.box(gx-1,60,16,16,7,0); h.R(gx+5,62,2,7,4); }
+  // gauges flanking: bezel, tick marks, needle
+  for(const gx of [102,196]){
+    h.box(gx-2,58,18,18,8,0); h.box(gx,60,14,14,15,0);  // iron bezel + white face
+    h.P(gx+2,63,0); h.P(gx+6,61,0); h.P(gx+10,63,0);    // tick marks
+    h.L(gx+6,70,gx+10,64,4); h.P(gx+6,70,0);            // red needle + pivot
+    h.R(gx,74,14,1,7);
+  }
   // operating slab (right, near Hammerstein)
   h.box(244,120,72,12,7,0); h.L(248,132,248,158,8); h.L(310,132,310,158,8);
   h.D(244,120,72,4,7,8);
@@ -314,10 +355,12 @@ function save(name, f){ fs.writeFileSync(path.join(outDir, name+".png"), encodeP
   for(let x=0;x<W;x+=26) h.L(x,138,x,160,8);
   h.D(0,156,W,4,8,6);
   h.R(0,160,W,40,8);
-  // open hatch with ladder (left)
+  // open hatch with a proper ladder (left)
   h.box(16,120,44,40,0,8);
-  for(let i=0;i<4;i++) h.R(22,152-i*8,32,3,6);
+  h.R(14,118,48,2,14);                                  // worn rim of the opening
   h.D(20,122,36,10,14,6);                               // lamplight from below
+  for(const rx of [24,48]){ h.R(rx,112,3,46,6); h.P(rx,112,14); h.R(rx,112,1,46,14); } // rails poking up
+  for(let i=0;i<5;i++){ h.R(27,118+i*9,21,3,6); h.R(27,118+i*9,21,1,14); }             // rungs
   // round porthole window (center-top), moonlight
   for(let j=-18;j<=18;j++)for(let i=-18;i<=18;i++){
     const d=i*i+j*j;

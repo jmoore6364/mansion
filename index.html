@@ -207,7 +207,7 @@ const EGA = [
 const RGB = EGA.map(c => `rgb(${c[0]},${c[1]},${c[2]})`);
 
 /* Build tag — bump on each deploy to bust cached art (see loadImg). */
-const BUILD = "20260625f";
+const BUILD = "20260625g";
 
 /* ---------- Canvas setup ---------- */
 const W = 320, H = 200;
@@ -818,7 +818,7 @@ const rooms = {
     walk:{x:8,y:150,w:304,h:38}, enterX:40, enterY:158,
     hotspots:[
       {x:8,y:96,w:40,h:64,   cmd:"go street"},
-      {x:286,y:40,w:34,h:120,cmd:"go up"},
+      {x:278,y:32,w:42,h:128,cmd:"go up"},
       {x:150,y:40,w:44,h:120,cmd:()=> flag("clock_open")?"go down":(flag("clock_oiled")?"open clock":(hasItem("oil")?"use oil":"look clock"))},
       {x:228,y:38,w:48,h:44, cmd:()=> flag("music_taken")?"look shelf":"get box"},
       {x:104,y:144,w:24,h:16,cmd:()=> flag("oil_taken")?"look oil":"get oil"},
@@ -826,7 +826,7 @@ const rooms = {
     ],
     bg:"art/shop.png",
     over(){
-      text("EXIT", 14,120, 14); text("UP", 296, 120, 11);
+      text("EXIT", 14,120, 14); text("UP", 300, 52, 11);
       text("DUSTY ANTIQUES EVERYWHERE", 70, 8, 14);
       if(!flag("music_taken")){
         rect(238,52,28,18, 5); rect(238,52,28,4,13);
@@ -903,7 +903,7 @@ const rooms = {
     name:"The Upstairs Parlor",
     walk:{x:8,y:150,w:304,h:38}, enterX:280, enterY:158,
     hotspots:[
-      {x:286,y:40,w:34,h:120,cmd:"go down"},
+      {x:274,y:78,w:46,h:82,cmd:"go down"},
       {x:222,y:86,w:30,h:38, cmd:()=> flag("lantern_taken")?"look lantern":"get lantern"},
       {x:150,y:36,w:40,h:46, cmd:"look portrait"},
       {x:40,y:30,w:52,h:70,  cmd:"look window"},
@@ -913,7 +913,7 @@ const rooms = {
     ],
     bg:"art/upstairs.png",
     over(){
-      text("DOWN", 290, 120, 11); text("THE PARLOR ABOVE", 96, 8, 13);
+      text("DOWN", 286, 86, 11); text("THE PARLOR ABOVE", 96, 8, 13);
       if(!flag("lantern_taken")){
         const g=(Math.sin(performance.now()/180)>0)?14:12;
         rect(230,96,16,22,6); rect(232,98,12,18,g);
@@ -1046,7 +1046,7 @@ const rooms = {
     name:"The Catacombs",
     walk:{x:8,y:150,w:304,h:38}, enterX:30, enterY:158,
     hotspots:[
-      {x:6,y:96,w:34,h:64,   cmd:"go up"},
+      {x:6,y:88,w:36,h:72,   cmd:"go up"},
       {x:46,y:88,w:40,h:32,  cmd:"talk gargoyle"},
       {x:120,y:118,w:70,h:42,cmd:()=> (flag("sarc_looked")&&!flag("coin_taken"))?"get coin":"look sarcophagus"},
       {x:264,y:80,w:48,h:80, cmd:()=> flag("gate_open")?"go east":(hasItem("coin")?"use coin":"look gate")}
